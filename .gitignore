@@ -1,0 +1,9 @@
+# System & editor
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# Recordings & test outputs
+*.mp4
+*.webm

@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hand Window</title>
+<style>
+  :root {
+    --ink: #f4f1ec; --dim: #a9a49c; --bg: #0b0a0c; --panel: rgba(16, 14, 18, .78);
+    --line: rgba(255, 255, 255, .16); --accent: #e5273f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); overflow: hidden;
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #stage { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  #start { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); z-index: 3; overflow: auto; }
+  #start[hidden] { display: none; }
+  .card { max-width: 30rem; width: 100%; }
+  .slit { height: 10px; margin-bottom: 28px; background: var(--accent); transform: skewY(-1.4deg); box-shadow: 0 0 0 2px #000, 0 0 0 3px rgba(255,255,255,.5); }
+  h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); line-height: 1; margin: 0 0 14px; letter-spacing: -.02em; font-weight: 800; }
+  .card p { margin: 0 0 18px; color: var(--dim); }
+  .steps { list-style: none; margin: 0 0 26px; padding: 0; display: grid; gap: 8px; }
+  .steps li { display: grid; grid-template-columns: 7.2rem 1fr; gap: 10px; }
+  .steps b { font-weight: 600; }
+  .steps span { color: var(--dim); }
+  .primary { background: var(--accent); border: 0; border-radius: 8px; padding: 13px 22px; font-weight: 700; color: #fff; min-height: 46px; }
+  .primary:hover { filter: brightness(1.1); }
+  .primary:disabled { opacity: .6; cursor: progress; }
+  .link { background: none; border: 0; padding: 12px 6px; margin-left: 10px; text-decoration: underline; color: var(--ink); min-height: 44px; }
+  .note { font-size: 13px; margin-top: 18px !important; }
+  #err { color: #ff9aa6; font-weight: 600; min-height: 1.4em; margin: 16px 0 0; }
+
+  #hud { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: grid; justify-items: center; gap: 8px;
+    padding: 0 16px calc(14px + env(safe-area-inset-bottom)); pointer-events: none; }
+  #hud[hidden] { display: none; }
+  #hint { background: var(--panel); padding: 6px 12px; border-radius: 6px; text-align: center; max-width: 100%; }
+  .bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 6px; pointer-events: auto; max-width: 100%; }
+  .bar button { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 8px 12px; min-height: 40px; }
+  .bar button:hover { border-color: var(--line); }
+  .bar button[aria-pressed="true"] { background: var(--ink); color: #111; font-weight: 600; }
+  .bar .sep { width: 1px; background: var(--line); margin: 4px 2px; }
+  #rec.on { background: var(--accent); color: #fff; font-weight: 600; }
+  #status { position: fixed; top: calc(10px + env(safe-area-inset-top)); left: 16px; z-index: 2; font-size: 13px; background: var(--panel);
+    padding: 4px 10px; border-radius: 6px; display: flex; gap: 8px; align-items: center; max-width: calc(100% - 32px); }
+  #status[hidden] { display: none; }
+  #retry { background: none; border: 0; text-decoration: underline; padding: 0; }
+  #retry[hidden] { display: none; }
+  @media (max-width: 480px) { .steps li { grid-template-columns: 1fr; gap: 0; } .link { margin-left: 0; } }
+</style>
+</head>
+<body>
+<canvas id="stage" width="1280" height="720" aria-label="Your camera with the hand window effect"></canvas>
+
+<section id="start">
+  <div class="card">
+    <div class="slit"></div>
+    <h1>Hand Window</h1>
+    <p>Stretch a window between your hands. Inside it, you are a drawn character.</p>
+    <ul class="steps">
+      <li><b>Pinch both hands</b><span>a thin band opens between them</span></li>
+      <li><b>Open and spread</b><span>the band widens, then takes over the frame</span></li>
+      <li><b>Cover the lens</b><span>uncover to land on the next look</span></li>
+      <li><b>Pinch again</b><span>back to the band; drop your hands to close it</span></li>
+    </ul>
+    <button class="primary" id="go">Start camera</button><button class="link" id="demo">Try demo without a camera</button>
+    <p id="err" role="alert"></p>
+    <p class="note">Your video stays on this device. The tracking library and models download once from public CDNs.</p>
+  </div>
+</section>
+
+<div id="status" hidden><span id="statusText"></span><button id="retry" hidden>Retry</button></div>
+<div id="hud" hidden>
+  <div id="hint" aria-live="polite"></div>
+  <div class="bar" role="toolbar" aria-label="Controls">
+    <button data-look="0" aria-pressed="true">Hero</button>
+    <button data-look="1" aria-pressed="false">Anime</button>
+    <button data-look="2" aria-pressed="false">Noir</button>
+    <span class="sep"></span>
+    <button id="full">Full frame</button>
+    <button id="rec">Record</button>
+  </div>
+</div>
+
+<script type="module">
+const VISION = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODELS = 'https://storage.googleapis.com/mediapipe-models';
+const HAND_MODEL = `${MODELS}/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`;
+const FACE_MODEL = `${MODELS}/face_landmarker/face_landmarker/float16/1/face_landmarker.task`;
+
+// Tuning. These are first guesses, tested on a scripted demo and stills rather than live hands.
+const PINCH_RATIO = 0.35;      // thumb-index gap / palm length
+const TAKEOVER_AREA = 0.18;    // share of the frame the window must cover
+const HAND_LOST_MS = 350;
+const FACE_LOST_MS = 500;
+const LOOKS = ['Hero', 'Anime', 'Noir'];
+
+const $ = id => document.getElementById(id);
+const stage = $('stage');
+const ctx = stage.getContext('2d', { alpha: false });
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t * t * (3 - 2 * t);
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+
+let W = 1280, H = 720, source = null, look = 0, flashAt = -1e9;
+const params = new URLSearchParams(location.search);
+
+/* ---------- face and hand state ---------- */
+
+const OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+const LIPS_IN = [78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95];
+const BROW_A = [70,63,105,66,107], BROW_B = [300,293,334,296,336];
+const USED = [...new Set([...OVAL, ...LIPS_IN, ...BROW_A, ...BROW_B, 1,168,61,291,13,14,205,425,263,362,386,374,33,133,159,145,468,473])];
+const HAND_IDX = [0, 4, 8, 9];
+
+const faceTgt = new Float32Array(478 * 2), faceCur = new Float32Array(478 * 2);
+let faceSeen = -1e9;
+const slots = [newSlot(), newSlot()];
+function newSlot() { return { seen: -1e9, tgt: {}, cur: {} }; }
+
+function setFace(lm, now) {           // lm: index -> {x,y} normalised, unmirrored
+  const fresh = now - faceSeen > FACE_LOST_MS;
+  for (const i of USED) {
+    const p = lm[i]; if (!p) continue;
+    faceTgt[i * 2] = (1 - p.x) * W; faceTgt[i * 2 + 1] = p.y * H;
+    if (fresh) { faceCur[i * 2] = faceTgt[i * 2]; faceCur[i * 2 + 1] = faceTgt[i * 2 + 1]; }
+  }
+  faceSeen = now;
+}
+
+// Slower machines deliver hand results further apart, so "lost" has to stretch with the real gap.
+let handAt = null, handGap = 0;
+const staleAfter = base => Math.max(base, handGap * 2.5);
+
+function setHands(list, now) {        // list: array of landmark arrays/maps, normalised and unmirrored
+  if (handAt != null) {
+    const gap = Math.min(now - handAt, 1500);   // capped so a hidden tab can't stretch it
+    handGap = handGap ? lerp(handGap, gap, .25) : gap;
+  }
+  handAt = now;
+  const mapped = list.map(lm => {
+    const m = {};
+    for (const i of HAND_IDX) m[i] = [(1 - lm[i].x) * W, lm[i].y * H];
+    return m;
+  }).sort((a, b) => a[0][0] - b[0][0]);
+  const put = (slot, m) => {
+    if (now - slot.seen > staleAfter(HAND_LOST_MS)) for (const i of HAND_IDX) slot.cur[i] = [...m[i]];
+    slot.tgt = m; slot.seen = now;
+  };
+  if (mapped.length >= 2) { put(slots[0], mapped[0]); put(slots[1], mapped[mapped.length - 1]); }
+  else if (mapped.length === 1) {
+    const live = slots.map(s => now - s.seen <= staleAfter(HAND_LOST_MS) ? dist(s.tgt[0], mapped[0][0]) : Infinity);
+    const i = live[0] === Infinity && live[1] === Infinity ? (mapped[0][0][0] < W / 2 ? 0 : 1) : (live[0] <= live[1] ? 0 : 1);
+    put(slots[i], mapped[0]);
+  }
+}
+
+function smooth() {
+  const scale = 1 / Math.max(W, H);
+  for (const s of slots) for (const i of HAND_IDX) {
+    if (!s.tgt[i] || !s.cur[i]) continue;
+    const k = clamp(.25 + dist(s.cur[i], s.tgt[i]) * scale * 8, .25, .9);
+    s.cur[i][0] = lerp(s.cur[i][0], s.tgt[i][0], k);
+    s.cur[i][1] = lerp(s.cur[i][1], s.tgt[i][1], k);
+  }
+  for (const i of USED) {
+    const a = i * 2, b = a + 1;
+    const k = clamp(.25 + Math.hypot(faceTgt[a] - faceCur[a], faceTgt[b] - faceCur[b]) * scale * 8, .25, .9);
+    faceCur[a] = lerp(faceCur[a], faceTgt[a], k);
+    faceCur[b] = lerp(faceCur[b], faceTgt[b], k);
+  }
+}
+
+const F = i => [faceCur[i * 2], faceCur[i * 2 + 1]];
+const handsPresent = now => slots.every(s => now - s.seen <= staleAfter(HAND_LOST_MS));
+const isPinched = s => dist(s.tgt[4], s.tgt[8]) / Math.max(1, dist(s.tgt[0], s.tgt[9])) < PINCH_RATIO;
+const bothPinched = now => handGap > 0 && slots.every(s => now - s.seen <= staleAfter(200) && isPinched(s));   // one result alone gives no gap to judge by
+
+/* ---------- window state machine ---------- */
+
+const win = { state: 'idle', t0: 0, from: null, q: null, pinchSince: null };
+
+function liveQuad() {
+  const edge = s => {
+    const a = s.cur[4], b = s.cur[8];
+    let [top, bot] = a[1] <= b[1] ? [[...a], [...b]] : [[...b], [...a]];
+    if (bot[1] - top[1] < 8) { const m = (top[1] + bot[1]) / 2; top[1] = m - 4; bot[1] = m + 4; }
+    return [top, bot];
+  };
+  const [lt, lb] = edge(slots[0]), [rt, rb] = edge(slots[1]);
+  return [lt, rt, rb, lb];
+}
+function quadArea(q) {
+  let a = 0;
+  for (let i = 0; i < 4; i++) { const p = q[i], n = q[(i + 1) % 4]; a += p[0] * n[1] - n[0] * p[1]; }
+  return Math.abs(a) / 2 / (W * H);
+}
+const fullQuad = () => { const o = W * .12; return [[-o, -o], [W + o, -o], [W + o, H + o], [-o, H + o]]; };
+const bandQuad = () => [[W * .08, H * .46], [W * .92, H * .46], [W * .92, H * .54], [W * .08, H * .54]];
+const lerpQuad = (a, b, ts) => a.map((p, i) => { const t = ts.length ? ts[i] : ts; return [lerp(p[0], b[i][0], t), lerp(p[1], b[i][1], t)]; });
+
+function go(state, now) {
+  win.state = state; win.t0 = now; win.from = win.q ? win.q.map(p => [...p]) : null;
+  updateHint();
+}
+
+function step(now) {
+  const both = handsPresent(now);
+  win.pinchSince = bothPinched(now) ? (win.pinchSince ?? now) : null;
+  const pinched = win.pinchSince == null ? 0 : now - win.pinchSince;
+  const age = now - win.t0;
+  switch (win.state) {
+    case 'idle':
+      if (pinched >= 90 && both) { win.q = liveQuad(); go('held', now); }
+      break;
+    case 'held':
+      if (!both) { go('closing', now); break; }
+      win.q = liveQuad();
+      if (age >= 500 && quadArea(win.q) >= TAKEOVER_AREA) go('opening', now);
+      break;
+    case 'opening': {
+      // Corners leave at different times, so the edge sweeps across on a diagonal.
+      const delays = [190, 0, 70, 130], full = fullQuad();
+      win.q = win.from.map((p, i) => {
+        const t = ease(clamp((age - delays[i]) / (550 - delays[i]), 0, 1));
+        return [lerp(p[0], full[i][0], t), lerp(p[1], full[i][1], t)];
+      });
+      if (age >= 550) { win.q = full; go('full', now); }
+      break;
+    }
+    case 'full':
+      win.q = fullQuad();
+      if (pinched >= 120 && age >= 1200) go('returning', now);
+      break;
+    case 'returning': {
+      if (!both) { go('closing', now); break; }
+      const t = ease(clamp(age / 450, 0, 1)), live = liveQuad();
+      win.q = win.from.map((p, i) => [lerp(p[0], live[i][0], t), lerp(p[1], live[i][1], t)]);
+      if (age >= 450) { win.q = live; go('held', now); }
+      break;
+    }
+    case 'closing': {
+      const f = win.from, l = mid(f[0], f[3]), r = mid(f[1], f[2]);
+      win.q = lerpQuad(f, [l, r, r, l], ease(clamp(age / 220, 0, 1)));
+      if (age >= 220) { win.q = null; go('idle', now); }
+      break;
+    }
+  }
+}
+
+function toggleFull() {
+  const now = performance.now();
+  if (win.state === 'full') return go('closing', now);
+  if (win.state === 'opening' || win.state === 'returning') return;
+  if (!win.q) win.q = bandQuad();
+  go('opening', now);
+}
+
+/* ---------- stylise shader ---------- */
+
+const styl = (() => {
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, preserveDrawingBuffer: false });
+  let ok = false, uLook, uPx, tex;
+  if (gl) {
+    const vs = `#version 300 es
+      out vec2 v;
+      void main() {
+        vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+        v = vec2(1. - p.x, p.y);          // mirrored, and row 0 of the upload is the top
+        gl_Position = vec4(p.x * 2. - 1., 1. - p.y * 2., 0., 1.);
+      }`;
+    const fs = `#version 300 es
+      precision highp float;
+      in vec2 v; out vec4 o;
+      uniform sampler2D tex; uniform vec2 px; uniform int look;
+      float L(vec3 c) { return dot(c, vec3(.299, .587, .114)); }
+      vec3 S(vec2 d) { return texture(tex, v + d * px).rgb; }
+      vec3 sat(vec3 c, float s) { return mix(vec3(L(c)), c, s); }
+      float edge(float r) {
+        float a = L(S(vec2(-r,-r))), b = L(S(vec2(0,-r))), c = L(S(vec2(r,-r))), d = L(S(vec2(-r,0)));
+        float f = L(S(vec2(r,0))), g = L(S(vec2(-r,r))), h = L(S(vec2(0,r))), i = L(S(vec2(r,r)));
+        return length(vec2(a + 2.*d + g - c - 2.*f - i, a + 2.*b + c - g - 2.*h - i));
+      }
+      float dots(float l, float cell, float ang) {     // 0 inside a dot, 1 on paper
+        float s = sin(ang), c = cos(ang);
+        vec2 q = fract(mat2(c, -s, s, c) * gl_FragCoord.xy / cell) - .5;
+        float r = sqrt(max(0., 1. - l)) * .72;
+        return smoothstep(r - .08, r + .08, length(q));
+      }
+      void main() {
+        vec3 c = S(vec2(0)); float l = L(c);
+        if (look == 0) {                                 // comic: posterised, blue shadows, halftone
+          vec3 p = floor(sat(c, 1.9) * 5. + .5) / 5.;
+          p = mix(vec3(.04, .09, .34), p, smoothstep(.1, .42, l));
+          p *= mix(.7, 1., dots(clamp(l * 1.3, 0., 1.), 6., .6));
+          o = vec4(mix(p, vec3(.02, .02, .07), smoothstep(.32, .72, edge(1.5))), 1.);
+        } else if (look == 1) {                          // anime: flat bands, pastel lift, soft plum lines
+          vec3 b = (c + S(vec2(2,0)) + S(vec2(-2,0)) + S(vec2(0,2)) + S(vec2(0,-2))) / 5.;
+          float bl = L(b);
+          vec3 p = sat(b, 1.35) / max(bl, .06) * (floor(bl * 3.5 + .5) / 3.5 + .06);
+          p = mix(p, vec3(1., .9, .96), .2);
+          o = vec4(mix(p, vec3(.3, .12, .36), smoothstep(.28, .8, edge(1.)) * .8), 1.);
+        } else {                                         // noir: black and white manga
+          float t = smoothstep(.1, .78, l);
+          float p = dots(t, 5., .78);
+          p = mix(p, 1., smoothstep(.72, .88, t));
+          p *= smoothstep(.05, .14, t) * .25 + .75;
+          o = vec4(vec3(mix(p, 0., smoothstep(.28, .62, edge(1.5)))), 1.);
+        }
+      }`;
+    const compile = (type, src) => {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    };
+    try {
+      const prog = gl.createProgram();
+      gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+      gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      gl.useProgram(prog);
+      uLook = gl.getUniformLocation(prog, 'look'); uPx = gl.getUniformLocation(prog, 'px');
+      tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      for (const [k, val] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, val);
+      ok = true;
+      canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); ok = false; });
+    } catch (e) { console.warn('Stylise shader unavailable, using canvas filters', e); }
+  }
+  const flat = document.createElement('canvas'), fctx = flat.getContext('2d');
+  const FILTERS = ['contrast(1.35) saturate(1.9)', 'brightness(1.1) saturate(1.3) contrast(.9) blur(1px)', 'grayscale(1) contrast(1.9)'];
+  return {
+    get gl() { return ok; },
+    render(el, w, h, which) {
+      if (ok) {
+        if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, el);
+        gl.uniform1i(uLook, which); gl.uniform2f(uPx, 1 / w, 1 / h);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        return canvas;
+      }
+      if (flat.width !== w || flat.height !== h) { flat.width = w; flat.height = h; }
+      fctx.setTransform(-1, 0, 0, 1, w, 0);
+      fctx.filter = FILTERS[which];
+      fctx.drawImage(el, 0, 0, w, h);
+      return flat;
+    },
+  };
+})();
+
+/* ---------- drawn looks, positioned from the face landmarks ---------- */
+
+function faceFrame() {
+  const top = F(10), chin = F(152), l = F(234), r = F(454);
+  const c = mid(top, chin);
+  const ux = [(r[0] - l[0]) / 2, (r[1] - l[1]) / 2], uy = [(chin[0] - top[0]) / 2, (chin[1] - top[1]) / 2];
+  return { c, ux, uy, roll: Math.atan2(-uy[0], uy[1]), at: (fx, fy) => [c[0] + ux[0] * fx + uy[0] * fy, c[1] + ux[1] * fx + uy[1] * fy] };
+}
+function trace(points, close = true) {
+  ctx.beginPath();
+  points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  if (close) ctx.closePath();
+}
+function ovalPath(center, scale, topBoost = 0) {
+  const pts = OVAL.map(i => {
+    const p = F(i), up = p[1] < center[1] ? topBoost : 0;
+    return [center[0] + (p[0] - center[0]) * (scale + up), center[1] + (p[1] - center[1]) * (scale + up)];
+  });
+  ctx.beginPath();
+  let m = mid(pts[pts.length - 1], pts[0]);
+  ctx.moveTo(m[0], m[1]);
+  pts.forEach((p, i) => { m = mid(p, pts[(i + 1) % pts.length]); ctx.quadraticCurveTo(p[0], p[1], m[0], m[1]); });
+  ctx.closePath();
+}
+function eyeOf(outer, inner, up, down) {
+  const a = F(outer), b = F(inner), width = dist(a, b);
+  return { c: mid(a, b), hw: width / 2, a, b, open: clamp((dist(F(up), F(down)) / Math.max(1, width)) / .28, 0, 1) };
+}
+
+function drawHero(fr) {
+  const size = Math.hypot(fr.uy[0], fr.uy[1]);
+  ovalPath(fr.c, 1.06, .08);
+  const g = ctx.createRadialGradient(fr.c[0], fr.c[1] - size * .3, size * .1, fr.c[0], fr.c[1], size * 1.25);
+  g.addColorStop(0, '#e41f33'); g.addColorStop(.65, '#b70f22'); g.addColorStop(1, '#5e0510');
+  ctx.fillStyle = g; ctx.fill();
+
+  ctx.save(); ovalPath(fr.c, 1.06, .08); ctx.clip();
+  const nose = F(1);
+  ctx.strokeStyle = 'rgba(45,0,6,.5)'; ctx.lineWidth = Math.max(1, size * .012);
+  for (const s of [.22, .38, .54, .7, .86]) { ovalPath(nose, s, .03); ctx.stroke(); }
+  trace([F(10), F(168), F(1), F(152)], false); ctx.lineWidth = Math.max(1, size * .018); ctx.stroke();
+  const m1 = F(61), m2 = F(291), mc = mid(F(13), F(14)), mw = dist(m1, m2);
+  ctx.fillStyle = 'rgba(30,0,4,.34)';
+  ctx.beginPath(); ctx.ellipse(mc[0], mc[1], mw * .5, Math.max(mw * .16, dist(F(13), F(14)) * .7), fr.roll, 0, 7); ctx.fill();
+  ctx.restore();
+
+  const uyLen = size || 1, dn = [fr.uy[0] / uyLen, fr.uy[1] / uyLen];
+  for (const e of [eyeOf(263, 362, 386, 374), eyeOf(33, 133, 159, 145)]) {
+    const ax = [(e.a[0] - e.b[0]) / 2, (e.a[1] - e.b[1]) / 2];   // inner to outer
+    const P = (x, y) => [e.c[0] + ax[0] * x + dn[0] * e.hw * y, e.c[1] + ax[1] * x + dn[1] * e.hw * y];
+    ctx.fillStyle = '#080406';
+    trace([P(-1.25, .25), P(-.55, -.75), P(1.5, -1.25), P(1.75, .25), P(.8, 1.15), P(-.45, 1)]); ctx.fill();
+    const o = lerp(.12, 1, e.open);
+    ctx.fillStyle = '#fdfdf8';
+    trace([P(-.9, .3), P(-.35, .3 - .8 * o), P(1.25, .1 - 1.05 * o), P(1.4, .3), P(.65, .3 + .55 * o), P(-.3, .3 + .45 * o)]); ctx.fill();
+  }
+}
+
+function animeEye(e, roll, iris, dark) {
+  const rx = e.hw * 1.3, ry = e.hw * 1.62 * lerp(.3, 1, e.open);
+  ctx.save(); ctx.translate(e.c[0], e.c[1] - e.hw * .1); ctx.rotate(roll);
+  if (e.open < .25) {                                // a blink reads as a single lash line
+    ctx.strokeStyle = dark; ctx.lineWidth = Math.max(2, e.hw * .22); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-rx, 0); ctx.quadraticCurveTo(0, rx * .28, rx, 0); ctx.stroke();
+    ctx.restore(); return;
+  }
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
+  ctx.save(); ctx.clip();
+  const dx = clamp((iris[0] - e.c[0]) * 2.1, -rx * .4, rx * .4), dy = clamp((iris[1] - e.c[1]) * 2.1, -ry * .25, ry * .25);
+  const irisG = ctx.createLinearGradient(0, dy - ry * .8, 0, dy + ry * .8);
+  irisG.addColorStop(0, '#30184f'); irisG.addColorStop(.55, '#6a3fb0'); irisG.addColorStop(1, '#d8a6f0');
+  ctx.fillStyle = irisG;
+  ctx.beginPath(); ctx.ellipse(dx, dy, rx * .72, ry * .86, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#16091f';
+  ctx.beginPath(); ctx.ellipse(dx, dy + ry * .04, rx * .36, ry * .46, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(dx - rx * .3, dy - ry * .36, rx * .23, ry * .21, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(dx + rx * .26, dy + ry * .34, rx * .1, ry * .09, 0, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = dark; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(2.5, e.hw * .28);
+  ctx.beginPath(); ctx.ellipse(0, 0, rx * 1.02, ry * 1.02, 0, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+  ctx.lineWidth = Math.max(1, e.hw * .07);
+  ctx.beginPath(); ctx.ellipse(0, 0, rx * .96, ry * 1.02, 0, Math.PI * .2, Math.PI * .8); ctx.stroke();
+  ctx.restore();
+}
+
+const HAIR = [[-1.18,.25],[-1.3,-.35],[-1.18,-.75],[-1.32,-1],[-.98,-1.18],[-1,-1.5],[-.62,-1.42],[-.42,-1.78],[-.12,-1.52],[.18,-1.85],[.42,-1.5],[.8,-1.62],[.86,-1.25],[1.25,-1.18],[1.15,-.82],[1.34,-.5],[1.18,.25],
+  [1.02,-.1],[.98,-.5],[.72,-.82],[.6,-.42],[.34,-.8],[.12,-.38],[-.1,-.82],[-.34,-.4],[-.56,-.82],[-.72,-.46],[-.98,-.72],[-1.02,-.1]];
+
+function drawAnime(fr) {
+  const size = Math.hypot(fr.uy[0], fr.uy[1]), dark = '#2a1236';
+  ovalPath(fr.c, 1.03, 0);
+  const skin = ctx.createLinearGradient(0, fr.c[1] - size, 0, fr.c[1] + size);
+  skin.addColorStop(0, '#f2cdbd'); skin.addColorStop(.4, '#fbe3d6'); skin.addColorStop(1, '#f6d3c4');
+  ctx.fillStyle = skin; ctx.fill();
+
+  ctx.fillStyle = 'rgba(244,120,140,.34)';
+  for (const i of [205, 425]) { const p = F(i); ctx.beginPath(); ctx.ellipse(p[0], p[1], size * .17, size * .085, fr.roll, 0, 7); ctx.fill(); }
+
+  animeEye(eyeOf(263, 362, 386, 374), fr.roll, F(473), dark);
+  animeEye(eyeOf(33, 133, 159, 145), fr.roll, F(468), dark);
+
+  const dn = [fr.uy[0] * -.09, fr.uy[1] * -.09];
+  ctx.strokeStyle = dark; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, size * .028);
+  for (const b of [BROW_A, BROW_B]) { trace(b.map(i => { const p = F(i); return [p[0] + dn[0], p[1] + dn[1]]; }), false); ctx.stroke(); }
+
+  const n = F(1);
+  ctx.lineWidth = Math.max(1.5, size * .014);
+  ctx.beginPath(); ctx.moveTo(n[0] - size * .02, n[1] - size * .03); ctx.lineTo(n[0] + size * .015, n[1] + size * .02); ctx.stroke();
+
+  const lipA = F(61), lipB = F(291), gap = dist(F(13), F(14)), mw = dist(lipA, lipB);
+  if (gap / Math.max(1, mw) > .12) {
+    trace(LIPS_IN.map(F)); ctx.fillStyle = '#8d2036'; ctx.fill();
+    ctx.lineWidth = Math.max(1.5, size * .014); ctx.stroke();
+  } else {
+    const mc = mid(F(13), F(14)), a = [lerp(mc[0], lipA[0], .62), lerp(mc[1], lipA[1], .62)], b = [lerp(mc[0], lipB[0], .62), lerp(mc[1], lipB[1], .62)];
+    ctx.lineWidth = Math.max(2, size * .02);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(mc[0] + fr.uy[0] * .05, mc[1] + fr.uy[1] * .05, b[0], b[1]); ctx.stroke();
+  }
+
+  const hair = HAIR.map(p => fr.at(p[0], p[1]));
+  const crown = fr.at(0, -1.8), jaw = fr.at(0, .3);
+  const hg = ctx.createLinearGradient(crown[0], crown[1], jaw[0], jaw[1]);
+  hg.addColorStop(0, '#2c2a6e'); hg.addColorStop(.55, '#1b1846'); hg.addColorStop(1, '#0f0d2c');
+  trace(hair); ctx.fillStyle = hg; ctx.fill();
+  ctx.lineWidth = Math.max(1.5, size * .014); ctx.strokeStyle = '#07061a'; ctx.stroke();
+  ctx.strokeStyle = 'rgba(160,170,255,.5)'; ctx.lineWidth = Math.max(2, size * .035);
+  for (const [a, b] of [[[-.72,-1.12],[-.42,-1.38]], [[-.2,-1.14],[.1,-1.42]], [[.34,-1.14],[.62,-1.36]]]) {
+    trace([fr.at(a[0], a[1]), fr.at(b[0], b[1])], false); ctx.stroke();
+  }
+}
+
+function drawNoir(fr) {
+  const e = mid(mid(F(263), F(362)), mid(F(33), F(133)));
+  const X = (fx, fy) => [e[0] + fr.ux[0] * fx + fr.uy[0] * fy, e[1] + fr.ux[1] * fx + fr.uy[1] * fy];
+  ctx.fillStyle = '#000';
+  trace([X(-1.3, -.2), X(1.3, -.2), X(1.3, .2), X(-1.3, .2)]);
+  ctx.fill();
+}
+
+/* ---------- frame ---------- */
+
+function drawMarkers(now) {
+  // Only while idle, so you can see the tracker has found your fingers before anything opens.
+  for (const s of slots) {
+    if (now - s.seen > staleAfter(HAND_LOST_MS)) continue;
+    const on = isPinched(s);
+    for (const i of [4, 8]) {
+      const p = s.cur[i];
+      ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(4, W * .005), 0, 7);
+      ctx.lineWidth = 2; ctx.strokeStyle = '#fff';
+      if (on) { ctx.fillStyle = '#e5273f'; ctx.fill(); }
+      ctx.stroke();
+    }
+  }
+}
+
+function draw(now) {
+  const el = source.el;
+  ctx.setTransform(-1, 0, 0, 1, W, 0);
+  ctx.drawImage(el, 0, 0, W, H);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  if (win.q) {
+    const painted = styl.render(el, W, H, look);
+    ctx.save();
+    trace(win.q); ctx.clip();
+    ctx.drawImage(painted, 0, 0, W, H);
+    if (now - faceSeen <= FACE_LOST_MS) {
+      const fr = faceFrame();
+      ctx.lineJoin = 'round';
+      [drawHero, drawAnime, drawNoir][look](fr);
+    }
+    ctx.restore();
+    if (win.state !== 'full') {
+      trace(win.q); ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(3, W * .004); ctx.strokeStyle = '#000'; ctx.stroke();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.stroke();
+    }
+  } else {
+    drawMarkers(now);
+  }
+
+  const flash = 1 - (now - flashAt) / 180;
+  if (flash > 0 && !reduced.matches) { ctx.fillStyle = `rgba(255,255,255,${(flash * .85).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
+}
+
+/* ---------- covering the lens changes look ---------- */
+
+const lens = { canvas: document.createElement('canvas'), next: 0, mean: null, std: 0, since: null, covered: false, last: -1e9, started: 0, off: false };
+lens.canvas.width = 32; lens.canvas.height = 18;
+const lctx = lens.canvas.getContext('2d', { willReadFrequently: true });
+
+function sampleLens(now) {
+  if (lens.off || now < lens.next) return;
+  lens.next = now + 100;
+  let d;
+  try { lctx.drawImage(source.el, 0, 0, 32, 18); d = lctx.getImageData(0, 0, 32, 18).data; }
+  catch { lens.off = true; return; }
+  let sum = 0, sq = 0;
+  for (let i = 0; i < d.length; i += 4) { const y = .299 * d[i] + .587 * d[i + 1] + .114 * d[i + 2]; sum += y; sq += y * y; }
+  const n = d.length / 4, mean = sum / n, std = Math.sqrt(Math.max(0, sq / n - mean * mean));
+  if (lens.mean == null) { lens.mean = mean; lens.std = std; lens.started = now; return; }
+  const warm = now - lens.started < 1500;
+  const low = !warm && (mean < .55 * lens.mean || std < .4 * lens.std);
+  if (low) {
+    lens.since ??= now;
+    const held = now - lens.since;
+    if (held > 120) lens.covered = true;
+    if (held > 4000) { lens.mean = mean; lens.std = std; lens.since = null; lens.covered = false; }  // the room changed, not a hand
+  } else {
+    if (lens.covered && now - lens.last >= 1200) { lens.last = now; setLook((look + 1) % LOOKS.length); flashAt = now; }
+    lens.covered = false; lens.since = null;
+    const a = warm ? .25 : .03;
+    lens.mean = lerp(lens.mean, mean, a); lens.std = lerp(lens.std, std, a);
+  }
+}
+
+/* ---------- trackers ---------- */
+
+const tr = { status: 'off', hand: null, face: null, turn: 0, next: 0, ts: 0, cost: 0, error: '', delegate: '', hands: 0, faces: 0 };
+
+async function create(Task, fileset, path, extra) {
+  for (const delegate of ['GPU', 'CPU']) {
+    try {
+      const task = await Task.createFromOptions(fileset, { baseOptions: { modelAssetPath: path, delegate }, runningMode: 'VIDEO', ...extra });
+      tr.delegate = delegate;
+      return task;
+    } catch (e) { if (delegate === 'CPU') throw e; console.warn('GPU delegate failed, retrying on CPU', e); }
+  }
+}
+
+async function loadTrackers() {
+  tr.status = 'loading'; tr.error = '';
+  setStatus('Loading hand tracking…'); updateHint();
+  try {
+    const { FilesetResolver, HandLandmarker, FaceLandmarker } = await import(`${VISION}/vision_bundle.mjs`);
+    const fileset = await FilesetResolver.forVisionTasks(`${VISION}/wasm`);
+    tr.hand = await create(HandLandmarker, fileset, HAND_MODEL, { numHands: 2 });
+    tr.face = await create(FaceLandmarker, fileset, FACE_MODEL, { numFaces: 1 });
+    tr.status = 'ready';
+    setStatus('');
+  } catch (e) {
+    console.error('Tracking failed to load', e);
+    tr.status = 'failed'; tr.error = String(e?.message || e);
+    setStatus("Hand tracking didn't load. The buttons still work.", true);
+  }
+  updateHint();
+}
+
+function infer(now) {
+  if (tr.status !== 'ready' || now < tr.next) return;
+  const el = source.el;
+  if (el.tagName === 'VIDEO' && el.readyState < 2) return;
+  const t0 = performance.now();
+  tr.ts = Math.max(tr.ts + 1, Math.round(t0));
+  try {
+    if (tr.turn === 0) {
+      const r = tr.hand.detectForVideo(el, tr.ts);
+      tr.hands = r.landmarks.length;
+      setHands(r.landmarks, now);
+    } else {
+      const r = tr.face.detectForVideo(el, tr.ts);
+      tr.faces = r.faceLandmarks.length;
+      if (r.faceLandmarks[0]) setFace(r.faceLandmarks[0], now);
+    }
+  } catch (e) {
+    console.error('Tracking stopped', e);
+    tr.status = 'failed'; tr.error = String(e?.message || e);
+    setStatus('Hand tracking stopped. The buttons still work.', true); updateHint();
+    return;
+  }
+  tr.turn ^= 1;
+  tr.cost = performance.now() - t0;
+  tr.next = performance.now() + Math.max(33, tr.cost * 1.5);   // keep the render loop responsive on slower machines
+}
+
+/* ---------- demo: a painted scene and scripted landmarks, no camera or models ---------- */
+
+function makeDemo() {
+  const c = document.createElement('canvas'); c.width = 1280; c.height = 720;
+  const g = c.getContext('2d');
+  const FX = 95 / 1280, FY = 125 / 720;
+  const tpl = {};
+  OVAL.forEach((i, k) => { const a = k / OVAL.length * Math.PI * 2; tpl[i] = [Math.sin(a), -Math.cos(a)]; });
+  Object.assign(tpl, {
+    1: [0, .22], 168: [0, -.2], 61: [-.36, .55], 291: [.36, .55], 13: [0, .5], 14: [0, .56], 205: [-.55, .34], 425: [.55, .34],
+    263: [.62, -.14], 362: [.18, -.14], 386: [.4, -.22], 374: [.4, -.07], 473: [.4, -.14],
+    33: [-.62, -.14], 133: [-.18, -.14], 159: [-.4, -.22], 145: [-.4, -.07], 468: [-.4, -.14],
+  });
+  BROW_A.forEach((i, k) => { tpl[i] = [-.72 + k * .13, -.36 - Math.sin(k / 4 * Math.PI) * .05]; });
+  BROW_B.forEach((i, k) => { tpl[i] = [.72 - k * .13, -.36 - Math.sin(k / 4 * Math.PI) * .05]; });
+  LIPS_IN.forEach((i, k) => { const a = k / LIPS_IN.length * Math.PI * 2; if (!tpl[i]) tpl[i] = [-Math.cos(a) * .24, .53 - Math.sin(a) * .03]; });
+
+  const start = { t: performance.now() };
+  let lastLoop = 0;
+  const seg = (t, a, b) => ease(clamp((t - a) / (b - a), 0, 1));
+
+  function pose(t) {
+    let x = .22, y = 1.0, gap = .12, cover = 0;
+    if (t < 2) { y = .86; }
+    else if (t < 3.6) { const k = seg(t, 2, 2.7); y = lerp(.86, .4, k); x = lerp(.22, .18, k); gap = lerp(.12, .012, seg(t, 2.3, 2.8)); }
+    else if (t < 5.6) { const k = seg(t, 3.6, 5.4); y = .4; x = lerp(.18, .08, k); gap = lerp(.012, .46, k); }
+    else if (t < 6.6) { const k = seg(t, 5.6, 6.5); y = lerp(.4, 1.3, k); x = .08; gap = .46; }
+    else if (t < 13.5) { y = 2; }
+    else if (t < 15.8) { const k = seg(t, 13.5, 14.2); y = lerp(1.3, .4, k); x = .18; gap = .012; }
+    else if (t < 16.6) { const k = seg(t, 15.8, 16.5); y = lerp(.4, 1.3, k); x = .18; gap = lerp(.012, .1, k); }
+    else { y = 2; }
+    cover = Math.max(seg(t, 8.5, 8.75) * (1 - seg(t, 9.15, 9.3)), seg(t, 11.2, 11.45) * (1 - seg(t, 11.85, 12)));
+    const hand = (px, side) => ({
+      0: { x: px + side * .05, y: y + .17 }, 9: { x: px + side * .025, y: y + .07 },
+      4: { x: px, y: y + gap / 2 }, 8: { x: px, y: y - gap / 2 },
+    });
+    return { hands: y < 1.15 ? [hand(x, -1), hand(1 - x, 1)] : [], cover };
+  }
+
+  function paint(t, p, lm, blink) {
+    const sky = g.createLinearGradient(0, 0, 0, 720);
+    sky.addColorStop(0, '#6d7f8c'); sky.addColorStop(1, '#3d4148');
+    g.fillStyle = sky; g.fillRect(0, 0, 1280, 720);
+    g.fillStyle = '#d8d1bd'; g.fillRect(90, 80, 250, 300);
+    g.fillStyle = '#8fb6cf'; g.fillRect(104, 94, 222, 272);
+    g.fillStyle = '#d8d1bd'; g.fillRect(212, 94, 6, 272); g.fillRect(104, 224, 222, 6);
+    g.fillStyle = '#5b4332'; g.fillRect(900, 150, 300, 14); g.fillRect(900, 300, 300, 14);
+    [['#b4533f', 60], ['#476e8a', 40], ['#c9a54e', 55], ['#6e4a7a', 46]].forEach(([col, h], i) => { g.fillStyle = col; g.fillRect(925 + i * 40, 150 - h, 30, h); g.fillRect(1030 + i * 36, 300 - h, 28, h); });
+    g.fillStyle = '#2b3546';
+    g.beginPath(); g.moveTo(330, 720); g.quadraticCurveTo(360, 500, 560, 470); g.lineTo(720, 470); g.quadraticCurveTo(920, 500, 950, 720); g.fill();
+    const fc = [lm[10].x * .5 + lm[152].x * .5, lm[10].y * .5 + lm[152].y * .5];
+    g.fillStyle = '#d3a184'; g.fillRect(fc[0] * 1280 - 42, fc[1] * 720 + 80, 84, 90);
+    g.fillStyle = '#e0b295'; g.beginPath(); g.ellipse(fc[0] * 1280, fc[1] * 720, 95, 125, 0, 0, 7); g.fill();
+    g.fillStyle = '#2a2020'; g.beginPath(); g.ellipse(fc[0] * 1280, fc[1] * 720 - 78, 100, 62, 0, Math.PI, 0); g.fill();
+    g.fillStyle = '#231a1a';
+    for (const [a, b] of [[33, 133], [263, 362]]) {
+      const ex = (lm[a].x + lm[b].x) * 640, ey = (lm[a].y + lm[b].y) * 360;
+      g.beginPath(); g.ellipse(ex, ey, 15, blink ? 1.5 : 7, 0, 0, 7); g.fill();
+    }
+    g.strokeStyle = '#8f4f47'; g.lineWidth = 4; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(lm[61].x * 1280, lm[61].y * 720); g.quadraticCurveTo(lm[14].x * 1280, lm[14].y * 720 + 8, lm[291].x * 1280, lm[291].y * 720); g.stroke();
+
+    for (const h of p.hands) {
+      const P = i => [h[i].x * 1280, h[i].y * 720];
+      g.strokeStyle = '#d9a98c'; g.lineCap = 'round';
+      g.lineWidth = 58; g.beginPath(); g.moveTo(...P(0)); g.lineTo(...P(9)); g.stroke();
+      g.lineWidth = 20;
+      for (const i of [4, 8]) { g.beginPath(); g.moveTo(...P(9)); g.lineTo(...P(i)); g.stroke(); }
+      g.lineWidth = 40; g.beginPath(); g.moveTo(...P(0)); g.lineTo(P(0)[0], 760); g.stroke();
+    }
+    if (p.cover > 0) { g.fillStyle = `rgba(10,7,6,${p.cover})`; g.fillRect(0, 0, 1280, 720); }
+  }
+
+  return {
+    el: c, w: 1280, h: 720, start,
+    update(now) {
+      const elapsed = (now - start.t) / 1000;
+      const t = elapsed % 18, loop = Math.floor(elapsed / 18);
+      if (loop > lastLoop) setLook(0);
+      lastLoop = loop;
+      const sway = Math.sin(t * .9) * .012, bob = Math.sin(t * 1.3) * .006;
+      const blink = t % 4.2 < .13;
+      const lm = {};
+      for (const i in tpl) {
+        let [u, v] = tpl[i];
+        if (blink && (i == 386 || i == 159)) v += .06;
+        lm[i] = { x: .5 + sway + u * FX, y: .42 + bob + v * FY };
+      }
+      const p = pose(t);
+      paint(t, p, lm, blink);
+      setFace(lm, now);
+      setHands(p.hands, now);
+    },
+  };
+}
+
+/* ---------- start, UI, recording ---------- */
+
+function useSource(s) {
+  source = s;
+  $('start').hidden = true; $('hud').hidden = false;
+  lens.mean = null; lens.off = false;
+  fitStage();
+  updateHint();
+  requestAnimationFrame(tick);
+}
+let slowFrames = 0, lastFrame = 0, maxWidth = 1280;
+function fitStage() {
+  const w = source.w ?? source.el.videoWidth ?? source.el.naturalWidth, h = source.h ?? source.el.videoHeight ?? source.el.naturalHeight;
+  if (!w || !h) return;
+  const nw = Math.min(w, maxWidth), nh = Math.round(nw * h / w / 2) * 2;
+  if (nw !== W || nh !== H || stage.width !== nw || stage.height !== nh) {
+    const sx = nw / W, sy = nh / H;
+    for (const s of slots) for (const set of [s.cur, s.tgt]) for (const i in set) { set[i][0] *= sx; set[i][1] *= sy; }
+    for (let i = 0; i < faceCur.length; i += 2) { faceCur[i] *= sx; faceCur[i + 1] *= sy; faceTgt[i] *= sx; faceTgt[i + 1] *= sy; }
+    if (win.q) win.q = win.q.map(p => [p[0] * sx, p[1] * sy]);
+    if (win.from) win.from = win.from.map(p => [p[0] * sx, p[1] * sy]);
+    W = stage.width = nw; H = stage.height = nh;
+  }
+}
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  if (source.update) source.update(now);
+  else if (source.el.tagName === 'VIDEO' && source.el.readyState < 2) return;
+  fitStage();
+  infer(now);
+  sampleLens(now);
+  smooth();
+  step(now);
+  draw(now);
+
+  // A slow machine drops to a smaller stage once rather than stuttering. Never mid-recording.
+  const dt = now - lastFrame; lastFrame = now;
+  if (dt > 42 && dt < 250) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
+  if (slowFrames > 90 && maxWidth > 854 && !rec.mr) { maxWidth = 854; slowFrames = 0; fitStage(); }
+}
+
+function setStatus(text, canRetry = false) {
+  $('status').hidden = !text;
+  $('statusText').textContent = text;
+  $('retry').hidden = !canRetry;
+}
+function setLook(i) {
+  look = i;
+  document.querySelectorAll('[data-look]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.look === i)));
+}
+let lastHint = '';
+function updateHint() {
+  const s = win.state;
+  let text;
+  if (s === 'full') text = 'Cover the lens to change look. Pinch both hands to come back.';
+  else if (s === 'held' || s === 'returning') text = 'Open your fingers and spread your hands to widen. Drop them to close.';
+  else if (tr.status === 'loading') text = 'Loading hand tracking. Full frame works now.';
+  else if (tr.status === 'failed') text = 'No hand tracking. Use Full frame and the look buttons.';
+  else if (s === 'idle') text = 'Raise both hands and pinch thumb to finger.';
+  else text = lastHint;
+  if (source?.update) text = `Demo: ${text}`;
+  if (text !== lastHint) { $('hint').textContent = text; lastHint = text; }
+}
+
+const CAMERA_ERRORS = {
+  NotAllowedError: 'Camera access was blocked. Allow it in the address bar, then try again.',
+  SecurityError: 'Camera access was blocked. Allow it in the address bar, then try again.',
+  NotFoundError: 'No camera found. Plug one in, or try the demo.',
+  OverconstrainedError: 'No camera found that works here. Try the demo.',
+  NotReadableError: 'Another app is using the camera. Close it, then try again.',
+  AbortError: 'The camera did not start. Try again.',
+};
+
+async function startCamera() {
+  const btn = $('go'), err = $('err');
+  err.textContent = '';
+  if (!navigator.mediaDevices?.getUserMedia) {
+    err.textContent = 'This page needs http://localhost or https to use the camera.';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Starting…';
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } });
+  } catch (e) {
+    err.textContent = CAMERA_ERRORS[e.name] || `The camera did not start (${e.name}).`;
+    btn.disabled = false; btn.textContent = 'Try again';
+    return;
+  }
+  const video = document.createElement('video');
+  video.muted = true; video.playsInline = true; video.srcObject = stream;
+  try { await video.play(); } catch (e) { console.warn(e); }
+  stream.getVideoTracks()[0].addEventListener('ended', () => setStatus('The camera disconnected. Reload to start again.'));
+  addEventListener('pagehide', () => stream.getTracks().forEach(t => t.stop()));
+  useSource({ el: video });
+  loadTrackers();
+}
+
+function startDemo() { useSource(makeDemo()); }
+
+async function startStill(url) {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  useSource({ el: img, w: img.naturalWidth, h: img.naturalHeight });
+  await loadTrackers();
+}
+
+const rec = { mr: null, chunks: [], t0: 0, timer: 0 };
+function toggleRecord() {
+  const btn = $('rec');
+  if (rec.mr) { rec.mr.stop(); return; }
+  const type = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp8', 'video/webm'].find(t => MediaRecorder.isTypeSupported?.(t));
+  let mr;
+  try { mr = new MediaRecorder(stage.captureStream(30), type ? { mimeType: type } : undefined); }
+  catch (e) { console.error(e); setStatus("Recording isn't available in this browser."); return; }
+  rec.mr = mr; rec.chunks = []; rec.t0 = performance.now();
+  mr.ondataavailable = e => e.data.size && rec.chunks.push(e.data);
+  mr.onstop = () => {
+    clearInterval(rec.timer); rec.mr = null;
+    btn.textContent = 'Record'; btn.classList.remove('on');
+    const blob = new Blob(rec.chunks, { type: mr.mimeType });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `hand-window-${Date.now()}.${mr.mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  };
+  mr.start(500);
+  btn.classList.add('on');
+  const show = () => { btn.textContent = `Stop ${Math.round((performance.now() - rec.t0) / 1000)}s`; };
+  show(); rec.timer = setInterval(show, 500);
+}
+
+$('go').onclick = startCamera;
+$('demo').onclick = startDemo;
+$('full').onclick = toggleFull;
+$('rec').onclick = toggleRecord;
+$('retry').onclick = () => loadTrackers();
+document.querySelectorAll('[data-look]').forEach(b => { b.onclick = () => setLook(+b.dataset.look); });
+
+addEventListener('keydown', e => {
+  if (!source || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault(); setLook((look + 1) % LOOKS.length);
+  } else if (k >= '1' && k <= '3') setLook(+k - 1);
+  else if (k === 't') toggleFull();
+  else if (k === 'r') toggleRecord();
+});
+
+// Read by the browser checks; nothing in the page depends on it.
+window.__hw = {
+  get state() { return win.state; }, get look() { return look; }, get gl() { return styl.gl; },
+  get tracker() { return { status: tr.status, delegate: tr.delegate, hands: tr.hands, faces: tr.faces, cost: Math.round(tr.cost), error: tr.error }; },
+  get size() { return [W, H]; }, get area() { return win.q ? quadArea(win.q) : 0; },
+  get lens() { return { mean: lens.mean, std: lens.std, covered: lens.covered }; },
+  get pinch() { return slots.map(s => s.tgt[0] ? dist(s.tgt[4], s.tgt[8]) / dist(s.tgt[0], s.tgt[9]) : null); },
+  seek(sec) { if (source?.start) source.start.t = performance.now() - sec * 1000; },
+  setLook, toggleFull,
+};
+
+if (params.has('demo')) startDemo();
+else if (params.has('src')) startStill(params.get('src')).catch(e => { $('err').textContent = `Could not load that image: ${e.message}`; });
+</script>
+</body>
+</html>
