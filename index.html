@@ -76,9 +76,9 @@
 <div id="hud" hidden>
   <div id="hint" aria-live="polite"></div>
   <div class="bar" role="toolbar" aria-label="Controls">
-    <button data-look="0" aria-pressed="true">Spider-Man</button>
-    <button data-look="1" aria-pressed="false">Naruto (Sage)</button>
-    <button data-look="2" aria-pressed="false">Sharingan</button>
+    <button data-look="0" aria-pressed="true">Spider-Man (TASM 2)</button>
+    <button data-look="1" aria-pressed="false">Naruto</button>
+    <button data-look="2" aria-pressed="false">Sage Naruto</button>
     <button data-look="3" aria-pressed="false">Spider-Noir</button>
     <span class="sep"></span>
     <button id="full">Full frame</button>
@@ -97,7 +97,7 @@ const PINCH_RATIO = 0.35;      // thumb-index gap / palm length
 const TAKEOVER_AREA = 0.18;    // share of the frame the window must cover
 const HAND_LOST_MS = 350;
 const FACE_LOST_MS = 500;
-const LOOKS = ['Spider-Man', 'Naruto (Sage)', 'Sharingan', 'Spider-Noir'];
+const LOOKS = ['Spider-Man (TASM 2)', 'Naruto', 'Sage Naruto', 'Spider-Noir'];
 
 const $ = id => document.getElementById(id);
 const stage = $('stage');
@@ -393,196 +393,262 @@ function eyeOf(outer, inner, up, down) {
   return { c: mid(a, b), hw: width / 2, a, b, open: clamp((dist(F(up), F(down)) / Math.max(1, width)) / .28, 0, 1) };
 }
 
-/* ---------- realistic spider-man suit & webbing ---------- */
+/* ---------- the amazing spider-man 2 (tasm 2) realistic replica ---------- */
 
-function drawSuitTexture(fr, size) {
-  const step = Math.max(6, size * 0.04);
+// TASM 2 full head & neck cowl path
+function tasm2HeadNeckPath(fr, size) {
+  const chin = F(152), lJaw = F(172), rJaw = F(397);
+  const lNeck = [lJaw[0] + fr.uy[0] * 0.88 - fr.ux[0] * 0.1, lJaw[1] + fr.uy[1] * 0.88 - fr.ux[1] * 0.1];
+  const rNeck = [rJaw[0] + fr.uy[0] * 0.88 + fr.ux[0] * 0.1, rJaw[1] + fr.uy[1] * 0.88 + fr.ux[1] * 0.1];
+  const cCollar = [chin[0] + fr.uy[0] * 0.95, chin[1] + fr.uy[1] * 0.95];
+
+  ctx.beginPath();
+  // Trace skull cranium down along right jaw
+  const rightOvals = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397];
+  const leftOvals = [172, 136, 150, 149, 176, 148, 152];
+
+  // Cranium dome
+  const topCranium = fr.at(0, -1.35);
+  ctx.moveTo(topCranium[0], topCranium[1]);
+
+  rightOvals.forEach(i => {
+    const p = F(i);
+    ctx.lineTo(p[0] + (p[0] - fr.c[0]) * 0.06, p[1] + (p[1] - fr.c[1]) * 0.06);
+  });
+
+  // Down right neck to collar
+  ctx.lineTo(rNeck[0], rNeck[1]);
+  ctx.quadraticCurveTo(cCollar[0], cCollar[1], lNeck[0], lNeck[1]);
+  ctx.lineTo(lJaw[0], lJaw[1]);
+
+  // Up left jaw to top
+  const leftRemaining = [132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+  leftRemaining.forEach(i => {
+    const p = F(i);
+    ctx.lineTo(p[0] + (p[0] - fr.c[0]) * 0.06, p[1] + (p[1] - fr.c[1]) * 0.06);
+  });
+
+  ctx.closePath();
+}
+
+function drawTASM2FabricTexture(fr, size) {
+  const step = Math.max(5, size * 0.034);
   ctx.save();
-  ctx.globalAlpha = 0.24;
-  ctx.fillStyle = '#0a0206';
-  const startX = fr.c[0] - size * 1.3, endX = fr.c[0] + size * 1.3;
-  const startY = fr.c[1] - size * 1.3, endY = fr.c[1] + size * 1.3;
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = '#080104';
+  const startX = fr.c[0] - size * 1.5, endX = fr.c[0] + size * 1.5;
+  const startY = fr.c[1] - size * 1.5, endY = fr.c[1] + size * 2.2;
   ctx.beginPath();
   for (let y = startY; y < endY; y += step) {
     const shift = (Math.floor(y / step) % 2) * (step * 0.5);
     for (let x = startX + shift; x < endX; x += step) {
-      ctx.rect(x, y, step * 0.44, step * 0.44);
+      ctx.rect(x, y, step * 0.48, step * 0.48);
     }
   }
   ctx.fill();
   ctx.restore();
 }
 
-function drawSuitContourShading(fr, size) {
-  // Forehead specular highlight
-  const fore = fr.at(0, -0.65);
-  const fg = ctx.createRadialGradient(fore[0], fore[1], 0, fore[0], fore[1], size * 0.55);
-  fg.addColorStop(0, 'rgba(255,185,195,0.38)');
-  fg.addColorStop(0.5, 'rgba(255,100,120,0.12)');
+function drawTASM2Shading(fr, size) {
+  // Forehead daylight specular highlight
+  const fore = fr.at(0, -0.7);
+  const fg = ctx.createRadialGradient(fore[0], fore[1], 0, fore[0], fore[1], size * 0.65);
+  fg.addColorStop(0, 'rgba(255, 195, 205, 0.42)');
+  fg.addColorStop(0.45, 'rgba(255, 120, 135, 0.15)');
   fg.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = fg;
-  ctx.beginPath(); ctx.ellipse(fore[0], fore[1], size * 0.52, size * 0.36, fr.roll, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(fore[0], fore[1], size * 0.58, size * 0.42, fr.roll, 0, 7); ctx.fill();
 
-  // Nose bridge ridge highlight
+  // Nose bridge highlight
   const nTop = F(168), nBot = F(1);
   const nGrad = ctx.createLinearGradient(nTop[0], nTop[1], nBot[0], nBot[1]);
-  nGrad.addColorStop(0, 'rgba(255,215,225,0.4)');
-  nGrad.addColorStop(1, 'rgba(255,215,225,0.06)');
+  nGrad.addColorStop(0, 'rgba(255, 225, 235, 0.45)');
+  nGrad.addColorStop(1, 'rgba(255, 225, 235, 0.05)');
   ctx.strokeStyle = nGrad;
-  ctx.lineWidth = Math.max(2, size * 0.038);
+  ctx.lineWidth = Math.max(2, size * 0.04);
   ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(nTop[0], nTop[1]); ctx.lineTo(nBot[0], nBot[1]); ctx.stroke();
 
-  // Chin and jaw ambient occlusion shadow
+  // Deep throat & neck shadow beneath chin
   const chin = F(152);
-  const jg = ctx.createRadialGradient(chin[0], chin[1], size * 0.1, chin[0], chin[1], size * 0.7);
-  jg.addColorStop(0, 'rgba(25,0,6,0.7)');
-  jg.addColorStop(1, 'rgba(25,0,6,0)');
+  const jg = ctx.createRadialGradient(chin[0], chin[1], size * 0.05, chin[0], chin[1] + size * 0.4, size * 0.85);
+  jg.addColorStop(0, 'rgba(20, 0, 4, 0.82)');
+  jg.addColorStop(0.6, 'rgba(20, 0, 4, 0.45)');
+  jg.addColorStop(1, 'rgba(20, 0, 4, 0)');
   ctx.fillStyle = jg;
-  ctx.beginPath(); ctx.ellipse(chin[0], chin[1], size * 0.72, size * 0.38, fr.roll, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(chin[0], chin[1] + size * 0.35, size * 0.85, size * 0.55, fr.roll, 0, 7); ctx.fill();
 }
 
-function renderWebNetwork(origin, rays, size, strokeStyle, lineWidth, offset) {
-  ctx.save();
-  ctx.translate(offset[0], offset[1]);
-  ctx.strokeStyle = strokeStyle;
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  ctx.beginPath();
-  // 1. Radial spines
-  for (let i = 0; i < rays.length; i++) {
-    ctx.moveTo(origin[0], origin[1]);
-    ctx.lineTo(rays[i][0], rays[i][1]);
-  }
-
-  // 2. Scalloped connecting arches curving inwards toward origin
-  const rings = [0.18, 0.34, 0.50, 0.67, 0.84, 0.98];
-  for (const t of rings) {
-    for (let i = 0; i < rays.length; i++) {
-      const nextIdx = (i + 1) % rays.length;
-      const p1 = [lerp(origin[0], rays[i][0], t), lerp(origin[1], rays[i][1], t)];
-      const p2 = [lerp(origin[0], rays[nextIdx][0], t), lerp(origin[1], rays[nextIdx][1], t)];
-      const midX = (p1[0] + p2[0]) / 2, midY = (p1[1] + p2[1]) / 2;
-      const ctrlX = lerp(midX, origin[0], 0.28);
-      const ctrlY = lerp(midY, origin[1], 0.28);
-      ctx.moveTo(p1[0], p1[1]);
-      ctx.quadraticCurveTo(ctrlX, ctrlY, p2[0], p2[1]);
-    }
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawEmbossedWebbing(fr, size) {
-  const origin = F(168);
-  const radialIndices = [10, 338, 297, 332, 454, 356, 361, 288, 377, 152, 148, 58, 132, 234, 127, 103, 67];
+function drawTASM2Webbing(fr, size) {
+  const origin = F(168); // Glabella
+  const radialIndices = [10, 338, 297, 332, 454, 356, 361, 288, 397, 377, 152, 148, 172, 58, 132, 234, 127, 103, 67];
   const rays = radialIndices.map(idx => F(idx));
 
-  // 3-Pass 3D Embossed Webbing:
-  // Pass 1: Dark drop shadow
-  renderWebNetwork(origin, rays, size, 'rgba(15,0,5,0.65)', Math.max(1.8, size * 0.016), [0, size * 0.005]);
-  // Pass 2: Main charcoal web lines
-  renderWebNetwork(origin, rays, size, '#18151c', Math.max(1.4, size * 0.012), [0, 0]);
-  // Pass 3: Specular metallic ridge highlight
-  renderWebNetwork(origin, rays, size, 'rgba(240,245,255,0.4)', Math.max(0.8, size * 0.004), [0, -size * 0.003]);
+  // Add neck extensions to jaw rays
+  rays.push([F(172)[0] + fr.uy[0] * 0.85, F(172)[1] + fr.uy[1] * 0.85]);
+  rays.push([F(152)[0] + fr.uy[0] * 0.95, F(152)[1] + fr.uy[1] * 0.95]);
+  rays.push([F(397)[0] + fr.uy[0] * 0.85, F(397)[1] + fr.uy[1] * 0.85]);
+
+  const renderRaysAndArches = (strokeStyle, lineWidth, offset) => {
+    ctx.save();
+    ctx.translate(offset[0], offset[1]);
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.beginPath();
+    // 1. Radial spines
+    for (let i = 0; i < rays.length; i++) {
+      ctx.moveTo(origin[0], origin[1]);
+      ctx.lineTo(rays[i][0], rays[i][1]);
+    }
+
+    // 2. Concentric curved web rings
+    const rings = [0.15, 0.28, 0.44, 0.60, 0.76, 0.92, 1.05];
+    for (const t of rings) {
+      for (let i = 0; i < rays.length; i++) {
+        const nextIdx = (i + 1) % rays.length;
+        const p1 = [lerp(origin[0], rays[i][0], t), lerp(origin[1], rays[i][1], t)];
+        const p2 = [lerp(origin[0], rays[nextIdx][0], t), lerp(origin[1], rays[nextIdx][1], t)];
+        const midX = (p1[0] + p2[0]) / 2, midY = (p1[1] + p2[1]) / 2;
+        const ctrlX = lerp(midX, origin[0], 0.25);
+        const ctrlY = lerp(midY, origin[1], 0.25);
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.quadraticCurveTo(ctrlX, ctrlY, p2[0], p2[1]);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  // 3-Pass 3D Raised Rubber Webbing:
+  renderRaysAndArches('rgba(10, 0, 3, 0.75)', Math.max(2.2, size * 0.016), [0, size * 0.006]);
+  renderRaysAndArches('#141017', Math.max(1.6, size * 0.013), [0, 0]);
+  renderRaysAndArches('rgba(255, 255, 255, 0.45)', Math.max(0.8, size * 0.004), [0, -size * 0.003]);
 }
 
-function drawSpiderLens(e, fr, isRight, size) {
+// The Amazing Spider-Man 2 signature large reflective white-blue mesh eye lenses
+function drawTASM2Lens(e, fr, isRight, size) {
   const s = isRight ? 1 : -1;
   const ux = [fr.ux[0] / Math.hypot(fr.ux[0], fr.ux[1]), fr.ux[1] / Math.hypot(fr.ux[0], fr.ux[1])];
   const uy = [fr.uy[0] / Math.hypot(fr.uy[0], fr.uy[1]), fr.uy[1] / Math.hypot(fr.uy[0], fr.uy[1])];
 
-  const openness = lerp(0.2, 1.0, e.open);
-  const squintDip = (1 - openness) * e.hw * 0.45;
+  const openness = lerp(0.3, 1.0, e.open);
+  const squintDip = (1 - openness) * e.hw * 0.38;
 
   const pt = (lx, ly) => [
     e.c[0] + (ux[0] * lx * s + uy[0] * ly) * e.hw,
     e.c[1] + (ux[1] * lx * s + uy[1] * ly) * e.hw
   ];
 
-  const outerPoly = [
-    pt(-0.85, 0.1),
-    pt(-0.35, -0.95 + squintDip),
-    pt(0.7, -1.35 + squintDip * 0.8),
-    pt(1.85, -0.85),
-    pt(1.4, 0.45 - squintDip * 0.5),
-    pt(0.55, 1.25 - squintDip * 0.7),
-    pt(-0.4, 0.85 - squintDip * 0.4),
-  ];
+  // TASM 2 massive curved aerodynamic lens contours
+  const pNose = pt(-0.75, 0.15);
+  const pBrow = pt(-0.15, -1.25 + squintDip);
+  const pTemple = pt(1.78, -1.05 + squintDip * 0.8);
+  const pCheek = pt(1.48, 0.75 - squintDip * 0.35);
+  const pBottom = pt(0.42, 1.48 - squintDip * 0.55);
+  const pInnerLow = pt(-0.45, 0.95 - squintDip * 0.28);
 
-  const innerPoly = [
-    pt(-0.65, 0.12),
-    pt(-0.25, -0.72 + squintDip),
-    pt(0.65, -1.05 + squintDip * 0.8),
-    pt(1.5, -0.68),
-    pt(1.15, 0.35 - squintDip * 0.5),
-    pt(0.48, 0.98 - squintDip * 0.7),
-    pt(-0.28, 0.65 - squintDip * 0.4),
-  ];
+  // Outer frame path
+  const traceFrame = () => {
+    ctx.beginPath();
+    ctx.moveTo(pNose[0], pNose[1]);
+    ctx.quadraticCurveTo(pt(-0.55, -0.6)[0], pt(-0.55, -0.6)[1], pBrow[0], pBrow[1]);
+    ctx.quadraticCurveTo(pt(0.8, -1.45 + squintDip * 0.8)[0], pt(0.8, -1.45 + squintDip * 0.8)[1], pTemple[0], pTemple[1]);
+    ctx.quadraticCurveTo(pt(1.88, -0.1)[0], pt(1.88, -0.1)[1], pCheek[0], pCheek[1]);
+    ctx.quadraticCurveTo(pt(1.05, 1.58)[0], pt(1.05, 1.58)[1], pBottom[0], pBottom[1]);
+    ctx.quadraticCurveTo(pt(-0.1, 1.38)[0], pt(-0.1, 1.38)[1], pInnerLow[0], pInnerLow[1]);
+    ctx.quadraticCurveTo(pt(-0.75, 0.6)[0], pt(-0.75, 0.6)[1], pNose[0], pNose[1]);
+    ctx.closePath();
+  };
 
-  // 1. Lens drop shadow
+  // 1. Frame Drop Shadow onto suit
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.75)';
-  ctx.shadowBlur = Math.max(4, size * 0.04);
-  ctx.shadowOffsetY = size * 0.012;
-  ctx.fillStyle = '#08060a';
-  trace(outerPoly); ctx.fill();
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = Math.max(6, size * 0.05);
+  ctx.shadowOffsetY = size * 0.014;
+  ctx.fillStyle = '#060608';
+  traceFrame();
+  ctx.fill();
   ctx.restore();
 
-  // 2. Beveled sculpted black frame
+  // 2. Glossy Sculpted Black Frame
   ctx.save();
-  ctx.fillStyle = '#0c0a0f';
-  trace(outerPoly); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-  ctx.lineWidth = Math.max(1, e.hw * 0.07);
-  trace(outerPoly); ctx.stroke();
+  ctx.fillStyle = '#0a0a0e';
+  traceFrame();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.38)';
+  ctx.lineWidth = Math.max(1.2, e.hw * 0.08);
+  ctx.stroke();
   ctx.restore();
 
-  // 3. Inner white mesh lens
+  // 3. Inner White-Blue Reflective Mesh Lens
+  const ipNose = pt(-0.55, 0.18);
+  const ipBrow = pt(-0.1, -1.02 + squintDip);
+  const ipTemple = pt(1.5, -0.88 + squintDip * 0.8);
+  const ipCheek = pt(1.24, 0.62 - squintDip * 0.35);
+  const ipBottom = pt(0.38, 1.25 - squintDip * 0.55);
+  const ipInnerLow = pt(-0.32, 0.78 - squintDip * 0.28);
+
+  const traceInner = () => {
+    ctx.beginPath();
+    ctx.moveTo(ipNose[0], ipNose[1]);
+    ctx.quadraticCurveTo(pt(-0.45, -0.5)[0], pt(-0.45, -0.5)[1], ipBrow[0], ipBrow[1]);
+    ctx.quadraticCurveTo(pt(0.7, -1.18 + squintDip * 0.8)[0], pt(0.7, -1.18 + squintDip * 0.8)[1], ipTemple[0], ipTemple[1]);
+    ctx.quadraticCurveTo(pt(1.58, -0.1)[0], pt(1.58, -0.1)[1], ipCheek[0], ipCheek[1]);
+    ctx.quadraticCurveTo(pt(0.88, 1.32)[0], pt(0.88, 1.32)[1], ipBottom[0], ipBottom[1]);
+    ctx.quadraticCurveTo(pt(-0.05, 1.16)[0], pt(-0.05, 1.16)[1], ipInnerLow[0], ipInnerLow[1]);
+    ctx.quadraticCurveTo(pt(-0.55, 0.52)[0], pt(-0.55, 0.52)[1], ipNose[0], ipNose[1]);
+    ctx.closePath();
+  };
+
   ctx.save();
-  trace(innerPoly); ctx.clip();
+  traceInner();
+  ctx.clip();
 
-  const lensGrad = ctx.createLinearGradient(innerPoly[1][0], innerPoly[1][1], innerPoly[5][0], innerPoly[5][1]);
-  lensGrad.addColorStop(0, '#ffffff');
-  lensGrad.addColorStop(0.5, '#f0f4f8');
-  lensGrad.addColorStop(1, '#c0ceda');
-  ctx.fillStyle = lensGrad;
-  ctx.fillRect(e.c[0] - e.hw * 2, e.c[1] - e.hw * 2, e.hw * 4, e.hw * 4);
+  // TASM 2 signature pearlescent white-blue metallic reflective gradient
+  const lg = ctx.createLinearGradient(ipBrow[0], ipBrow[1], ipBottom[0], ipBottom[1]);
+  lg.addColorStop(0, '#ffffff');
+  lg.addColorStop(0.28, '#edf5fc');
+  lg.addColorStop(0.7, '#c2def8');
+  lg.addColorStop(1, '#8caecc');
+  ctx.fillStyle = lg;
+  ctx.fillRect(e.c[0] - e.hw * 2.5, e.c[1] - e.hw * 2.5, e.hw * 5, e.hw * 5);
 
-  // Micro-mesh grid inside lens
-  const gStep = Math.max(3, e.hw * 0.16);
-  ctx.fillStyle = 'rgba(40,55,75,0.18)';
+  // Micro-perforation mesh (one-way vision honeycomb)
+  const gStep = Math.max(3.2, e.hw * 0.14);
+  ctx.fillStyle = 'rgba(20, 45, 80, 0.24)';
   ctx.beginPath();
-  for (let y = e.c[1] - e.hw * 1.5; y < e.c[1] + e.hw * 1.5; y += gStep) {
+  for (let y = e.c[1] - e.hw * 2; y < e.c[1] + e.hw * 2; y += gStep) {
     const shift = (Math.floor(y / gStep) % 2) * (gStep * 0.5);
-    for (let x = e.c[0] - e.hw * 2 + shift; x < e.c[0] + e.hw * 2; x += gStep) {
-      ctx.rect(x, y, gStep * 0.45, gStep * 0.45);
+    for (let x = e.c[0] - e.hw * 2.5 + shift; x < e.c[0] + e.hw * 2.5; x += gStep) {
+      ctx.rect(x, y, gStep * 0.48, gStep * 0.48);
     }
   }
   ctx.fill();
 
-  // Glossy glass specular reflection across top
-  const glintGrad = ctx.createLinearGradient(innerPoly[1][0], innerPoly[1][1], e.c[0], e.c[1]);
-  glintGrad.addColorStop(0, 'rgba(255,255,255,0.65)');
-  glintGrad.addColorStop(0.6, 'rgba(255,255,255,0.18)');
-  glintGrad.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = glintGrad;
+  // Curved horizon reflection sheen across lens
+  const skyGlint = ctx.createLinearGradient(ipBrow[0], ipBrow[1], ipCheek[0], ipCheek[1]);
+  skyGlint.addColorStop(0, 'rgba(255,255,255,0.72)');
+  skyGlint.addColorStop(0.38, 'rgba(205,235,255,0.32)');
+  skyGlint.addColorStop(0.75, 'rgba(255,255,255,0.06)');
+  skyGlint.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = skyGlint;
   ctx.beginPath();
-  ctx.moveTo(innerPoly[0][0], innerPoly[0][1]);
-  ctx.lineTo(innerPoly[1][0], innerPoly[1][1]);
-  ctx.lineTo(innerPoly[2][0], innerPoly[2][1]);
-  ctx.lineTo(innerPoly[3][0], innerPoly[3][1]);
-  ctx.lineTo(e.c[0] + (innerPoly[3][0] - e.c[0]) * 0.3, e.c[1]);
-  ctx.lineTo(e.c[0] - e.hw * 0.4 * s, e.c[1]);
+  ctx.moveTo(ipNose[0], ipNose[1]);
+  ctx.quadraticCurveTo(pt(0.2, -0.8)[0], pt(0.2, -0.8)[1], ipTemple[0], ipTemple[1]);
+  ctx.lineTo(ipCheek[0], ipCheek[1]);
+  ctx.quadraticCurveTo(pt(0.2, 0.3)[0], pt(0.2, 0.3)[1], ipNose[0], ipNose[1]);
   ctx.closePath();
   ctx.fill();
 
-  // Inner frame rim shadow
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  // Inner rim shadow
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth = Math.max(1.5, e.hw * 0.08);
-  trace(innerPoly); ctx.stroke();
+  ctx.stroke();
+
   ctx.restore();
 }
 
@@ -590,114 +656,68 @@ function drawHero(fr) {
   const size = Math.hypot(fr.uy[0], fr.uy[1]);
   if (size < 5) return;
 
-  // 1. Mask Base with deep cinematic carmine red
+  // 1. Full TASM 2 Cowl & Neck with cinematic carmine red
   ctx.save();
-  ovalPath(fr.c, 1.06, .08);
+  tasm2HeadNeckPath(fr, size);
   ctx.clip();
 
-  const g = ctx.createRadialGradient(fr.c[0], fr.c[1] - size * .25, size * .1, fr.c[0], fr.c[1], size * 1.3);
-  g.addColorStop(0, '#f21b35');
-  g.addColorStop(0.35, '#cc0e24');
-  g.addColorStop(0.7, '#8f0717');
-  g.addColorStop(1, '#3a0209');
+  const g = ctx.createRadialGradient(fr.c[0], fr.c[1] - size * 0.35, size * 0.1, fr.c[0], fr.c[1], size * 1.4);
+  g.addColorStop(0, '#f21832');
+  g.addColorStop(0.35, '#c80f24');
+  g.addColorStop(0.7, '#880616');
+  g.addColorStop(1, '#320208');
   ctx.fillStyle = g;
-  ctx.fillRect(fr.c[0] - size * 1.5, fr.c[1] - size * 1.5, size * 3, size * 3);
+  ctx.fillRect(fr.c[0] - size * 2, fr.c[1] - size * 2, size * 4, size * 4);
 
   // Micro-fabric suit texture
-  drawSuitTexture(fr, size);
+  drawTASM2FabricTexture(fr, size);
 
   // 3D Ambient & specular shading
-  drawSuitContourShading(fr, size);
+  drawTASM2Shading(fr, size);
 
-  // Raised 3D embossed web network
-  drawEmbossedWebbing(fr, size);
+  // Raised 3D rubber web network
+  drawTASM2Webbing(fr, size);
 
   ctx.restore();
 
-  // 2. Animated Movie Spider-Man Eye Lenses
-  drawSpiderLens(eyeOf(263, 362, 386, 374), fr, true, size);
-  drawSpiderLens(eyeOf(33, 133, 159, 145), fr, false, size);
+  // 2. The Amazing Spider-Man 2 Iconic Lenses
+  drawTASM2Lens(eyeOf(263, 362, 386, 374), fr, true, size);
+  drawTASM2Lens(eyeOf(33, 133, 159, 145), fr, false, size);
 }
 
-/* ---------- naruto anime (sage mode & sharingan) ---------- */
+/* ---------- classic naruto uzumaki (shippuden anime replica) ---------- */
 
-// Hidden Leaf Village (Konohagakure) spiral symbol
-function drawKonohaEmblem(cx, cy, r, slash = false) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.strokeStyle = '#1b1f2b';
-  ctx.fillStyle = '#1b1f2b';
-  ctx.lineWidth = Math.max(1.8, r * 0.18);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  // Spiral swirl
-  ctx.beginPath();
-  for (let a = 0; a <= Math.PI * 3.2; a += 0.15) {
-    const rad = r * 0.18 + (r * 0.62) * (a / (Math.PI * 3.2));
-    const px = Math.cos(a) * rad, py = Math.sin(a) * rad;
-    if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-  }
-  ctx.stroke();
-
-  // Leaf point triangle at top-right
-  ctx.beginPath();
-  ctx.moveTo(r * 0.65, -r * 0.1);
-  ctx.lineTo(r * 1.05, -r * 0.55);
-  ctx.lineTo(r * 0.45, -r * 0.6);
-  ctx.closePath();
-  ctx.fill();
-
-  // Rogue ninja slash across the emblem
-  if (slash) {
-    ctx.strokeStyle = '#0e0b12';
-    ctx.lineWidth = Math.max(2.5, r * 0.26);
-    ctx.beginPath();
-    ctx.moveTo(-r * 1.4, -r * 0.15);
-    ctx.lineTo(r * 1.4, r * 0.15);
-    ctx.stroke();
-
-    ctx.strokeStyle = '#c42020';
-    ctx.lineWidth = Math.max(1, r * 0.08);
-    ctx.beginPath();
-    ctx.moveTo(-r * 1.4, -r * 0.15);
-    ctx.lineTo(r * 1.4, r * 0.15);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawForeheadProtector(fr, size, slash = false) {
-  const headCenter = fr.at(0, -0.88);
-  const bandW = size * 1.5, bandH = size * 0.42;
+// 6-Rivet Konoha Forehead Protector (*Hitai-ate*) as seen in Naruto anime screenshot
+function drawNarutoHeadband(fr, size, slash = false) {
+  const headCenter = fr.at(0, -0.86);
+  const bandW = size * 1.55, bandH = size * 0.44;
 
   ctx.save();
   ctx.translate(headCenter[0], headCenter[1]);
   ctx.rotate(fr.roll);
 
-  // 1. Navy-black cloth headband wrap
+  // 1. Black/Dark Navy ninja cloth wrap
   const bg = ctx.createLinearGradient(0, -bandH * 0.5, 0, bandH * 0.5);
-  bg.addColorStop(0, '#1c2235'); bg.addColorStop(0.5, '#121624'); bg.addColorStop(1, '#0c0f18');
+  bg.addColorStop(0, '#1f1e24'); bg.addColorStop(0.5, '#121116'); bg.addColorStop(1, '#09080c');
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.roundRect(-bandW * 0.5, -bandH * 0.5, bandW, bandH, 6);
   ctx.fill();
 
-  // Cloth edge highlights
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
   // 2. Curved brushed steel metal protector plate
-  const plateW = size * 0.88, plateH = size * 0.32;
+  const plateW = size * 0.92, plateH = size * 0.34;
   const pg = ctx.createLinearGradient(0, -plateH * 0.5, 0, plateH * 0.5);
-  pg.addColorStop(0, '#e5ebf2');
-  pg.addColorStop(0.25, '#d4dce6');
-  pg.addColorStop(0.65, '#9faab8');
+  pg.addColorStop(0, '#f0f4f8');
+  pg.addColorStop(0.2, '#dbe2ec');
+  pg.addColorStop(0.65, '#a4b0bf');
   pg.addColorStop(1, '#7e8a99');
 
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.65)';
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
   ctx.shadowBlur = 6;
   ctx.shadowOffsetY = 3;
   ctx.fillStyle = pg;
@@ -706,8 +726,8 @@ function drawForeheadProtector(fr, size, slash = false) {
   ctx.fill();
   ctx.restore();
 
-  // Plate border & metallic specular glare strip
-  ctx.strokeStyle = '#606a78';
+  // Plate border
+  ctx.strokeStyle = '#5a6472';
   ctx.lineWidth = Math.max(1.5, size * 0.012);
   ctx.beginPath();
   ctx.roundRect(-plateW * 0.5, -plateH * 0.5, plateW, plateH, 6);
@@ -716,96 +736,111 @@ function drawForeheadProtector(fr, size, slash = false) {
   // Specular sheen across upper metal plate
   const sheen = ctx.createLinearGradient(-plateW * 0.4, 0, plateW * 0.4, 0);
   sheen.addColorStop(0, 'rgba(255,255,255,0)');
-  sheen.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+  sheen.addColorStop(0.5, 'rgba(255,255,255,0.65)');
   sheen.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = sheen;
   ctx.fillRect(-plateW * 0.45, -plateH * 0.45, plateW * 0.9, plateH * 0.35);
 
-  // 4 Corner Rivets
-  const rx = plateW * 0.42, ry = plateH * 0.35, rr = Math.max(2, size * 0.016);
-  for (const [x, y] of [[-rx, -ry], [rx, -ry], [-rx, ry], [rx, ry]]) {
-    ctx.fillStyle = '#222730';
-    ctx.beginPath(); ctx.arc(x, y + 1, rr, 0, 7); ctx.fill();
-    ctx.fillStyle = '#dbe2ea';
-    ctx.beginPath(); ctx.arc(x, y, rr * 0.85, 0, 7); ctx.fill();
+  // Exactly 6 Rivets: 3 on left edge, 3 on right edge (exact anime design!)
+  const rx = plateW * 0.42, rr = Math.max(2, size * 0.016);
+  const ySlots = [-plateH * 0.32, 0, plateH * 0.32];
+  for (const y of ySlots) {
+    for (const x of [-rx, rx]) {
+      ctx.fillStyle = '#222730';
+      ctx.beginPath(); ctx.arc(x, y + 1, rr, 0, 7); ctx.fill();
+      ctx.fillStyle = '#dbe2ea';
+      ctx.beginPath(); ctx.arc(x, y, rr * 0.85, 0, 7); ctx.fill();
+    }
   }
 
-  // Hidden Leaf emblem
-  drawKonohaEmblem(0, 0, plateH * 0.34, slash);
+  // Engraved Hidden Leaf symbol
+  drawKonohaEmblem(0, 0, plateH * 0.36, slash);
 
   ctx.restore();
 }
 
-function drawNarutoWhiskers(fr, size) {
-  // 3 whiskers on each cheek
+// Spiky blond hair of Naruto Uzumaki
+function drawNarutoSpikyHair(fr, size) {
+  const crown = fr.at(0, -0.9);
   ctx.save();
-  ctx.strokeStyle = '#140c18';
-  ctx.lineWidth = Math.max(2.2, size * 0.018);
-  ctx.lineCap = 'round';
+  ctx.translate(crown[0], crown[1]);
+  ctx.rotate(fr.roll);
 
-  const whiskers = [
-    // Left cheek: top, mid, bottom
-    [[118, 127], [-.45, .15], [-.78, .12]],
-    [[123, 234], [-.48, .28], [-.82, .26]],
-    [[147, 132], [-.44, .42], [-.75, .44]],
-    // Right cheek: top, mid, bottom
-    [[347, 356], [.45, .15], [.78, .12]],
-    [[352, 454], [.48, .28], [.82, .26]],
-    [[376, 361], [.44, .42], [.75, .44]],
-  ];
+  const drawSpike = (x, y, w, h, angle) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    const hg = ctx.createLinearGradient(0, -h, 0, 0);
+    hg.addColorStop(0, '#ffe024');
+    hg.addColorStop(0.6, '#ffcc00');
+    hg.addColorStop(1, '#d89400');
+    ctx.fillStyle = hg;
+    ctx.strokeStyle = '#281700';
+    ctx.lineWidth = Math.max(2.2, size * 0.018);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-  for (const [lmIdxs, f1, f2] of whiskers) {
-    const p1 = (faceCur[lmIdxs[0] * 2] && !isNaN(faceCur[lmIdxs[0] * 2])) ? F(lmIdxs[0]) : fr.at(f1[0], f1[1]);
-    const p2 = (faceCur[lmIdxs[1] * 2] && !isNaN(faceCur[lmIdxs[1] * 2])) ? F(lmIdxs[1]) : fr.at(f2[0], f2[1]);
-    const midPt = mid(p1, p2);
-    const dip = [fr.uy[0] * 0.03, fr.uy[1] * 0.03];
     ctx.beginPath();
-    ctx.moveTo(p1[0], p1[1]);
-    ctx.quadraticCurveTo(midPt[0] + dip[0], midPt[1] + dip[1], p2[0], p2[1]);
+    ctx.moveTo(-w * 0.5, 0);
+    ctx.quadraticCurveTo(-w * 0.15, -h * 0.55, 0, -h);
+    ctx.quadraticCurveTo(w * 0.15, -h * 0.55, w * 0.5, 0);
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
-  }
+    ctx.restore();
+  };
+
+  // Top spikes radiating outward
+  const sw = size * 0.26, sh = size * 0.65;
+  drawSpike(0, -size * 0.25, sw * 1.1, sh * 1.15, 0);
+  drawSpike(-size * 0.24, -size * 0.22, sw, sh * 1.05, -0.22);
+  drawSpike(size * 0.24, -size * 0.22, sw, sh * 1.05, 0.22);
+  drawSpike(-size * 0.48, -size * 0.15, sw, sh * 0.95, -0.48);
+  drawSpike(size * 0.48, -size * 0.15, sw, sh * 0.95, 0.48);
+  drawSpike(-size * 0.68, -size * 0.05, sw, sh * 0.85, -0.78);
+  drawSpike(size * 0.68, -size * 0.05, sw, sh * 0.85, 0.78);
+
+  // Side hair tufts above ears
+  drawSpike(-size * 0.82, size * 0.22, sw * 0.85, sh * 0.72, -1.25);
+  drawSpike(size * 0.82, size * 0.22, sw * 0.85, sh * 0.72, 1.25);
+  drawSpike(-size * 0.76, size * 0.45, sw * 0.75, sh * 0.65, -1.45);
+  drawSpike(size * 0.76, size * 0.45, sw * 0.75, sh * 0.65, 1.45);
+
+  // Front locks dipping slightly over headband
+  drawSpike(-size * 0.32, size * 0.08, sw * 0.6, sh * 0.45, -0.15);
+  drawSpike(size * 0.32, size * 0.08, sw * 0.6, sh * 0.45, 0.15);
+
   ctx.restore();
 }
 
-function drawSageEye(e, roll, irisCenter, isRight, size) {
-  const rx = e.hw * 1.25, ry = e.hw * 1.45 * lerp(0.28, 1.0, e.open);
+// Sparkling Ocean Blue Anime Eyes of Naruto Uzumaki (Tracks Real Iris!)
+function drawNarutoBlueEye(e, roll, irisCenter, isRight, size) {
+  const rx = e.hw * 1.28, ry = e.hw * 1.45 * lerp(0.28, 1.0, e.open);
   const s = isRight ? 1 : -1;
 
   ctx.save();
   ctx.translate(e.c[0], e.c[1]);
   ctx.rotate(roll);
 
-  // 1. Mount Myoboku Orange Sage Eyeshadow (pigment around eye socket)
-  const pigmGrad = ctx.createRadialGradient(s * rx * 0.3, 0, rx * 0.5, s * rx * 0.4, 0, rx * 2.2);
-  pigmGrad.addColorStop(0, 'rgba(255, 90, 15, 0.95)');
-  pigmGrad.addColorStop(0.55, 'rgba(235, 45, 0, 0.85)');
-  pigmGrad.addColorStop(1, 'rgba(200, 20, 0, 0)');
-  ctx.fillStyle = pigmGrad;
-  ctx.beginPath();
-  // Winged orange eyeshadow flaring toward temple
-  ctx.ellipse(s * rx * 0.35, -ry * 0.1, rx * 1.55, ry * 1.5, 0, 0, 7);
-  ctx.fill();
-
-  // If blinking, draw closed anime lash with orange pigment and return
   if (e.open < 0.25) {
-    ctx.strokeStyle = '#120914';
+    ctx.strokeStyle = '#181018';
     ctx.lineWidth = Math.max(3, e.hw * 0.28);
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(-rx * 1.1, 0);
-    ctx.quadraticCurveTo(0, rx * 0.25, rx * 1.2, -rx * 0.1 * s);
+    ctx.quadraticCurveTo(0, rx * 0.22, rx * 1.2, -rx * 0.08 * s);
     ctx.stroke();
     ctx.restore();
     return;
   }
 
-  // 2. Eyeball Sclera
-  ctx.fillStyle = '#fdfdfd';
+  // 1. Sclera
+  ctx.fillStyle = '#ffffff';
   ctx.beginPath();
   ctx.ellipse(0, 0, rx, ry, 0, 0, 7);
   ctx.fill();
 
-  // 3. Sage Toad Iris (Tracks Real User Iris!)
+  // 2. Iris Clip
   ctx.save();
   ctx.beginPath();
   ctx.ellipse(0, 0, rx, ry, 0, 0, 7);
@@ -814,87 +849,210 @@ function drawSageEye(e, roll, irisCenter, isRight, size) {
   // Map real iris offset into local coordinates
   const dx = clamp((irisCenter[0] - e.c[0]) * 1.8, -rx * 0.42, rx * 0.42);
   const dy = clamp((irisCenter[1] - e.c[1]) * 1.8, -ry * 0.32, ry * 0.32);
-  const irisR = rx * 0.72;
+  const irisR = rx * 0.74;
 
-  // Golden-Amber Toad Sage Iris Gradient
-  const ig = ctx.createRadialGradient(dx, dy, irisR * 0.15, dx, dy, irisR);
-  ig.addColorStop(0, '#ffe838');
-  ig.addColorStop(0.5, '#ffa200');
-  ig.addColorStop(0.85, '#d95a00');
-  ig.addColorStop(1, '#4e1a00');
-  ctx.fillStyle = ig;
+  // Brilliant Ocean Blue Iris Gradient (exact match to anime screenshot!)
+  const bg = ctx.createRadialGradient(dx, dy, irisR * 0.18, dx, dy, irisR);
+  bg.addColorStop(0, '#38bdf8');
+  bg.addColorStop(0.35, '#0284c7');
+  bg.addColorStop(0.75, '#0369a1');
+  bg.addColorStop(1, '#082f49');
+  ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.arc(dx, dy, irisR, 0, 7);
   ctx.fill();
 
-  // Dark outer iris rim
-  ctx.strokeStyle = '#351200';
-  ctx.lineWidth = Math.max(1.5, irisR * 0.12);
+  // Dark navy iris rim
+  ctx.strokeStyle = '#051928';
+  ctx.lineWidth = Math.max(1.6, irisR * 0.12);
   ctx.stroke();
 
-  // Horizontal Toad Sage Bar/Slit Pupil (Signature Naruto Sage Mode pupil!)
-  const barW = irisR * 1.35, barH = irisR * 0.36;
-  ctx.fillStyle = '#100600';
+  // Center black pupil
+  ctx.fillStyle = '#06131e';
   ctx.beginPath();
-  ctx.roundRect(dx - barW * 0.5, dy - barH * 0.5, barW, barH, barH * 0.45);
+  ctx.arc(dx, dy, irisR * 0.35, 0, 7);
   ctx.fill();
 
-  // Specular anime eye glints
+  // Specular anime eye glint: crisp bright white highlight in upper-left
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(dx - irisR * 0.32, dy - irisR * 0.35, irisR * 0.24, 0, 7);
+  ctx.arc(dx - irisR * 0.32, dy - irisR * 0.34, irisR * 0.24, 0, 7);
   ctx.fill();
+
+  // Tiny subtle secondary shine
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.beginPath();
-  ctx.arc(dx + irisR * 0.3, dy + irisR * 0.28, irisR * 0.11, 0, 7);
+  ctx.arc(dx + irisR * 0.28, dy + irisR * 0.28, irisR * 0.1, 0, 7);
   ctx.fill();
 
-  ctx.restore(); // end eye clip
+  ctx.restore(); // end clip
 
-  // 4. Bold Anime Upper Eyelash Contour with Winged Tip
-  ctx.strokeStyle = '#120914';
+  // 3. Bold Anime Upper Eyelash Contour with Wing
+  ctx.strokeStyle = '#181018';
   ctx.lineCap = 'round';
-  ctx.lineWidth = Math.max(2.8, e.hw * 0.3);
+  ctx.lineWidth = Math.max(3, e.hw * 0.32);
   ctx.beginPath();
-  ctx.ellipse(0, 0, rx * 1.05, ry * 1.05, 0, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.ellipse(0, 0, rx * 1.05, ry * 1.05, 0, Math.PI * 1.04, Math.PI * 1.96);
   ctx.stroke();
 
-  // Winged flick on outer corner
+  // Outer lash wing
   ctx.beginPath();
-  ctx.moveTo(s * rx * 0.95, -ry * 0.2);
-  ctx.lineTo(s * (rx * 1.25), -ry * 0.45);
+  ctx.moveTo(s * rx * 0.95, -ry * 0.18);
+  ctx.lineTo(s * (rx * 1.25), -ry * 0.42);
   ctx.stroke();
 
   // Lower delicate lash
   ctx.lineWidth = Math.max(1.2, e.hw * 0.09);
   ctx.beginPath();
-  ctx.ellipse(0, 0, rx * 0.95, ry * 1.02, 0, Math.PI * 0.2, Math.PI * 0.8);
+  ctx.ellipse(0, 0, rx * 0.95, ry * 1.02, 0, Math.PI * 0.22, Math.PI * 0.78);
   ctx.stroke();
 
   ctx.restore();
 }
 
-function drawNaruto(fr) {
+function drawNarutoCleanWhiskers(fr, size) {
+  // 3 clean, delicate curved whiskers on each cheek exactly matching the anime reference
+  ctx.save();
+  ctx.strokeStyle = '#22141c';
+  ctx.lineWidth = Math.max(1.8, size * 0.015);
+  ctx.lineCap = 'round';
+
+  const whiskers = [
+    // Left cheek: top, mid, bottom
+    [[118, 127], [-.45, .16], [-.76, .14]],
+    [[123, 234], [-.48, .28], [-.80, .27]],
+    [[147, 132], [-.44, .40], [-.74, .42]],
+    // Right cheek: top, mid, bottom
+    [[347, 356], [.45, .16], [.76, .14]],
+    [[352, 454], [.48, .28], [.80, .27]],
+    [[376, 361], [.44, .40], [.74, .42]],
+  ];
+
+  for (const [lmIdxs, f1, f2] of whiskers) {
+    const p1 = (faceCur[lmIdxs[0] * 2] && !isNaN(faceCur[lmIdxs[0] * 2])) ? F(lmIdxs[0]) : fr.at(f1[0], f1[1]);
+    const p2 = (faceCur[lmIdxs[1] * 2] && !isNaN(faceCur[lmIdxs[1] * 2])) ? F(lmIdxs[1]) : fr.at(f2[0], f2[1]);
+    const midPt = mid(p1, p2);
+    const dip = [fr.uy[0] * 0.025, fr.uy[1] * 0.025];
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.quadraticCurveTo(midPt[0] + dip[0], midPt[1] + dip[1], p2[0], p2[1]);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawNarutoJacketCollar(fr, size) {
+  const chin = F(152);
+  const collarW = size * 1.3, collarH = size * 0.55;
+
+  ctx.save();
+  ctx.translate(chin[0], chin[1] + size * 0.12);
+  ctx.rotate(fr.roll);
+
+  // Black high-collar track jacket
+  ctx.fillStyle = '#18181f';
+  ctx.beginPath();
+  ctx.roundRect(-collarW * 0.5, 0, collarW, collarH, [12, 12, 4, 4]);
+  ctx.fill();
+
+  // Orange inner collar piping
+  ctx.strokeStyle = '#f97316';
+  ctx.lineWidth = Math.max(2.5, size * 0.02);
+  ctx.beginPath();
+  ctx.moveTo(-collarW * 0.45, 0);
+  ctx.lineTo(collarW * 0.45, 0);
+  ctx.stroke();
+
+  // Silver zipper line & pull tab
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = Math.max(2, size * 0.015);
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(0, collarH); ctx.stroke();
+
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.arc(0, size * 0.08, Math.max(2.5, size * 0.02), 0, 7);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawNarutoClassic(fr) {
   const size = Math.hypot(fr.uy[0], fr.uy[1]);
   if (size < 5) return;
 
-  // 1. Anime Cel-shaded Skin
+  // 1. Full Spiky Blond Hair
+  drawNarutoSpikyHair(fr, size);
+
+  // 2. Cel-shaded Anime Skin
   ovalPath(fr.c, 1.03, 0);
   const skin = ctx.createLinearGradient(0, fr.c[1] - size, 0, fr.c[1] + size);
-  skin.addColorStop(0, '#fde6d8'); skin.addColorStop(0.4, '#faede4'); skin.addColorStop(1, '#f7dbcb');
+  skin.addColorStop(0, '#fdebdc'); skin.addColorStop(0.4, '#faede4'); skin.addColorStop(1, '#f7dbcb');
   ctx.fillStyle = skin; ctx.fill();
 
-  // Warm cheek flush
-  ctx.fillStyle = 'rgba(255, 120, 100, 0.26)';
-  for (const i of [205, 425]) {
-    const p = F(i);
-    ctx.beginPath(); ctx.ellipse(p[0], p[1], size * 0.18, size * 0.085, fr.roll, 0, 7); ctx.fill();
+  // Soft anime shadow under headband
+  const fore = fr.at(0, -0.65);
+  ctx.fillStyle = 'rgba(215, 150, 120, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(fore[0], fore[1], size * 0.72, size * 0.18, fr.roll, 0, 7);
+  ctx.fill();
+
+  // 3. Naruto's Sparkling Ocean Blue Anime Eyes (Matching User's Gaze!)
+  drawNarutoBlueEye(eyeOf(263, 362, 386, 374), fr.roll, F(473), true, size);
+  drawNarutoBlueEye(eyeOf(33, 133, 159, 145), fr.roll, F(468), false, size);
+
+  // 4. Anime Eyebrows
+  const dn = [fr.uy[0] * -0.09, fr.uy[1] * -0.09];
+  ctx.strokeStyle = '#382200'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2.5, size * 0.028);
+  for (const b of [BROW_A, BROW_B]) {
+    trace(b.map(i => { const p = F(i); return [p[0] + dn[0], p[1] + dn[1]]; }), false);
+    ctx.stroke();
   }
 
-  // 2. Naruto Sage Mode Eyes (Mount Myoboku toad eyes tracking real iris!)
+  // 5. Anime Nose dot & mouth
+  const n = F(1);
+  ctx.fillStyle = '#6b4028';
+  ctx.beginPath(); ctx.arc(n[0], n[1], Math.max(1.8, size * 0.015), 0, 7); ctx.fill();
+
+  const lipA = F(61), lipB = F(291), gap = dist(F(13), F(14)), mw = dist(lipA, lipB);
+  if (gap / Math.max(1, mw) > 0.12) {
+    trace(LIPS_IN.map(F)); ctx.fillStyle = '#9c2438'; ctx.fill();
+    ctx.lineWidth = Math.max(1.5, size * 0.014); ctx.stroke();
+  } else {
+    const mc = mid(F(13), F(14)), a = [lerp(mc[0], lipA[0], 0.62), lerp(mc[1], lipA[1], 0.62)], b = [lerp(mc[0], lipB[0], 0.62), lerp(mc[1], lipB[1], 0.62)];
+    ctx.strokeStyle = '#4a2016'; ctx.lineWidth = Math.max(2, size * 0.02);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(mc[0] + fr.uy[0] * 0.04, mc[1] + fr.uy[1] * 0.04, b[0], b[1]); ctx.stroke();
+  }
+
+  // 6. Whiskers
+  drawNarutoCleanWhiskers(fr, size);
+
+  // 7. 6-Rivet Konoha Headband
+  drawNarutoHeadband(fr, size, false);
+
+  // 8. High-collar jacket
+  drawNarutoJacketCollar(fr, size);
+}
+
+function drawNarutoSage(fr) {
+  const size = Math.hypot(fr.uy[0], fr.uy[1]);
+  if (size < 5) return;
+
+  // 1. Spiky hair
+  drawNarutoSpikyHair(fr, size);
+
+  // 2. Skin
+  ovalPath(fr.c, 1.03, 0);
+  const skin = ctx.createLinearGradient(0, fr.c[1] - size, 0, fr.c[1] + size);
+  skin.addColorStop(0, '#fdebdc'); skin.addColorStop(0.4, '#faede4'); skin.addColorStop(1, '#f7dbcb');
+  ctx.fillStyle = skin; ctx.fill();
+
+  // 3. Sage Mode Toad Eyes (Mount Myoboku orange eyeshadow & golden horizontal slit pupil)
   drawSageEye(eyeOf(263, 362, 386, 374), fr.roll, F(473), true, size);
   drawSageEye(eyeOf(33, 133, 159, 145), fr.roll, F(468), false, size);
 
-  // 3. Eyebrows
+  // 4. Eyebrows
   const dn = [fr.uy[0] * -0.09, fr.uy[1] * -0.09];
   ctx.strokeStyle = '#241408'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.lineWidth = Math.max(2.5, size * 0.032);
@@ -903,196 +1061,24 @@ function drawNaruto(fr) {
     ctx.stroke();
   }
 
-  // 4. Nose & Mouth
+  // 5. Nose & Mouth
   const n = F(1);
-  ctx.strokeStyle = '#7c4d32'; ctx.lineWidth = Math.max(1.8, size * 0.016);
-  ctx.beginPath(); ctx.moveTo(n[0] - size * 0.02, n[1] - size * 0.02); ctx.lineTo(n[0] + size * 0.015, n[1] + size * 0.02); ctx.stroke();
-
-  const lipA = F(61), lipB = F(291), gap = dist(F(13), F(14)), mw = dist(lipA, lipB);
-  if (gap / Math.max(1, mw) > 0.12) {
-    trace(LIPS_IN.map(F)); ctx.fillStyle = '#9c2438'; ctx.fill();
-    ctx.lineWidth = Math.max(1.5, size * 0.014); ctx.stroke();
-  } else {
-    const mc = mid(F(13), F(14)), a = [lerp(mc[0], lipA[0], 0.62), lerp(mc[1], lipA[1], 0.62)], b = [lerp(mc[0], lipB[0], 0.62), lerp(mc[1], lipB[1], 0.62)];
-    ctx.strokeStyle = '#5a2216'; ctx.lineWidth = Math.max(2, size * 0.02);
-    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(mc[0] + fr.uy[0] * 0.05, mc[1] + fr.uy[1] * 0.05, b[0], b[1]); ctx.stroke();
-  }
-
-  // 5. Naruto 6 Cheek Whiskers
-  drawNarutoWhiskers(fr, size);
-
-  // 6. Konoha Forehead Protector (Hitai-ate)
-  drawForeheadProtector(fr, size, false);
-
-  // 7. Spiky Naruto Blond Bangs framing the headband
-  const hairLock = (px, py, w, h, ang) => {
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(ang);
-    const hg = ctx.createLinearGradient(0, -h, 0, 0);
-    hg.addColorStop(0, '#ffe842'); hg.addColorStop(0.65, '#f5be10'); hg.addColorStop(1, '#c99205');
-    ctx.fillStyle = hg;
-    ctx.strokeStyle = '#382200'; ctx.lineWidth = Math.max(1.4, size * 0.012);
-    ctx.beginPath();
-    ctx.moveTo(-w * 0.5, 0);
-    ctx.quadraticCurveTo(-w * 0.2, -h * 0.6, 0, -h);
-    ctx.quadraticCurveTo(w * 0.2, -h * 0.6, w * 0.5, 0);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.restore();
-  };
-
-  const topFore = fr.at(0, -1.05);
-  hairLock(topFore[0] - size * 0.35, topFore[1], size * 0.28, size * 0.55, fr.roll - 0.4);
-  hairLock(topFore[0] + size * 0.35, topFore[1], size * 0.28, size * 0.55, fr.roll + 0.4);
-  hairLock(topFore[0] - size * 0.15, topFore[1] - size * 0.08, size * 0.26, size * 0.52, fr.roll - 0.15);
-  hairLock(topFore[0] + size * 0.15, topFore[1] - size * 0.08, size * 0.26, size * 0.52, fr.roll + 0.15);
-}
-
-function drawSharinganEye(e, roll, irisCenter, isRight, size) {
-  const rx = e.hw * 1.25, ry = e.hw * 1.45 * lerp(0.28, 1.0, e.open);
-  const s = isRight ? 1 : -1;
-
-  ctx.save();
-  ctx.translate(e.c[0], e.c[1]);
-  ctx.rotate(roll);
-
-  if (e.open < 0.25) {
-    ctx.strokeStyle = '#0e0408';
-    ctx.lineWidth = Math.max(3, e.hw * 0.28);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-rx * 1.1, 0);
-    ctx.quadraticCurveTo(0, rx * 0.25, rx * 1.2, -rx * 0.1 * s);
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  // Sclera
-  ctx.fillStyle = '#fbfbfb';
-  ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
-
-  // Sharingan Iris Clip
-  ctx.save();
-  ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.clip();
-
-  const dx = clamp((irisCenter[0] - e.c[0]) * 1.8, -rx * 0.42, rx * 0.42);
-  const dy = clamp((irisCenter[1] - e.c[1]) * 1.8, -ry * 0.32, ry * 0.32);
-  const irisR = rx * 0.74;
-
-  // Glowing Crimson Sharingan Radial Gradient
-  const sg = ctx.createRadialGradient(dx, dy, irisR * 0.2, dx, dy, irisR);
-  sg.addColorStop(0, '#ff1f35');
-  sg.addColorStop(0.65, '#e00018');
-  sg.addColorStop(0.9, '#a00010');
-  sg.addColorStop(1, '#3a0006');
-  ctx.fillStyle = sg;
-  ctx.beginPath(); ctx.arc(dx, dy, irisR, 0, 7); ctx.fill();
-
-  // Outer black ring
-  ctx.strokeStyle = '#120004';
-  ctx.lineWidth = Math.max(1.8, irisR * 0.12);
-  ctx.stroke();
-
-  // Inner black ring that holds the tomoe
-  const tomoeRadius = irisR * 0.54;
-  ctx.strokeStyle = 'rgba(20, 0, 5, 0.85)';
-  ctx.lineWidth = Math.max(1.2, irisR * 0.07);
-  ctx.beginPath(); ctx.arc(dx, dy, tomoeRadius, 0, 7); ctx.stroke();
-
-  // Center black pupil
-  ctx.fillStyle = '#080002';
-  ctx.beginPath(); ctx.arc(dx, dy, irisR * 0.22, 0, 7); ctx.fill();
-
-  // 3 Tomoe (Magatama commas) spaced at 120 degrees, rotating subtly
-  const rotAngle = (performance.now() * 0.0016) * s;
-  for (let k = 0; k < 3; k++) {
-    const a = rotAngle + k * (Math.PI * 2 / 3);
-    const tx = dx + Math.cos(a) * tomoeRadius, ty = dy + Math.sin(a) * tomoeRadius;
-    const tr = irisR * 0.16;
-
-    ctx.save();
-    ctx.translate(tx, ty);
-    ctx.rotate(a + Math.PI * 0.5);
-
-    // Tomoe circular head
-    ctx.fillStyle = '#0a0003';
-    ctx.beginPath(); ctx.arc(0, 0, tr, 0, 7); ctx.fill();
-
-    // Tomoe curved tail along the ring
-    ctx.beginPath();
-    ctx.moveTo(-tr * 0.8, 0);
-    ctx.quadraticCurveTo(0, tr * 1.8, tr * 1.1, tr * 2.2);
-    ctx.quadraticCurveTo(tr * 0.2, tr * 1.2, tr * 0.8, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  // Specular shine
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.beginPath(); ctx.arc(dx - irisR * 0.35, dy - irisR * 0.35, irisR * 0.2, 0, 7); ctx.fill();
-
-  ctx.restore(); // end eye clip
-
-  // Sharp anime shinobi eyelashes
-  ctx.strokeStyle = '#0e0408';
-  ctx.lineCap = 'round';
-  ctx.lineWidth = Math.max(3, e.hw * 0.32);
-  ctx.beginPath();
-  ctx.ellipse(0, 0, rx * 1.05, ry * 1.05, 0, Math.PI * 1.05, Math.PI * 1.95);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(s * rx * 0.95, -ry * 0.2);
-  ctx.lineTo(s * (rx * 1.28), -ry * 0.48);
-  ctx.stroke();
-
-  ctx.lineWidth = Math.max(1.2, e.hw * 0.09);
-  ctx.beginPath();
-  ctx.ellipse(0, 0, rx * 0.95, ry * 1.02, 0, Math.PI * 0.2, Math.PI * 0.8);
-  ctx.stroke();
-
-  ctx.restore();
-}
-
-function drawSharingan(fr) {
-  const size = Math.hypot(fr.uy[0], fr.uy[1]);
-  if (size < 5) return;
-
-  // 1. Cool anime skin tone
-  ovalPath(fr.c, 1.03, 0);
-  const skin = ctx.createLinearGradient(0, fr.c[1] - size, 0, fr.c[1] + size);
-  skin.addColorStop(0, '#f5e4dd'); skin.addColorStop(0.4, '#f2ded6'); skin.addColorStop(1, '#e8cfc6');
-  ctx.fillStyle = skin; ctx.fill();
-
-  // 2. Sharingan Eyes
-  drawSharinganEye(eyeOf(263, 362, 386, 374), fr.roll, F(473), true, size);
-  drawSharinganEye(eyeOf(33, 133, 159, 145), fr.roll, F(468), false, size);
-
-  // 3. Fierce Uchiha Eyebrows
-  const dn = [fr.uy[0] * -0.09, fr.uy[1] * -0.09];
-  ctx.strokeStyle = '#140c10'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(2.8, size * 0.035);
-  for (const b of [BROW_A, BROW_B]) {
-    trace(b.map(i => { const p = F(i); return [p[0] + dn[0], p[1] + dn[1]]; }), false);
-    ctx.stroke();
-  }
-
-  // 4. Nose & Mouth
-  const n = F(1);
-  ctx.strokeStyle = '#603525'; ctx.lineWidth = Math.max(1.8, size * 0.016);
-  ctx.beginPath(); ctx.moveTo(n[0] - size * 0.02, n[1] - size * 0.02); ctx.lineTo(n[0] + size * 0.015, n[1] + size * 0.02); ctx.stroke();
+  ctx.fillStyle = '#6b4028';
+  ctx.beginPath(); ctx.arc(n[0], n[1], Math.max(1.8, size * 0.015), 0, 7); ctx.fill();
 
   const mc = mid(F(13), F(14)), lipA = F(61), lipB = F(291);
   const a = [lerp(mc[0], lipA[0], 0.62), lerp(mc[1], lipA[1], 0.62)], b = [lerp(mc[0], lipB[0], 0.62), lerp(mc[1], lipB[1], 0.62)];
-  ctx.strokeStyle = '#441612'; ctx.lineWidth = Math.max(2, size * 0.02);
+  ctx.strokeStyle = '#5a2216'; ctx.lineWidth = Math.max(2, size * 0.02);
   ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(mc[0] + fr.uy[0] * 0.04, mc[1] + fr.uy[1] * 0.04, b[0], b[1]); ctx.stroke();
 
-  // 5. Rogue Slashed Forehead Protector (Itachi / Sasuke style)
-  drawForeheadProtector(fr, size, true);
+  // 6. Whiskers
+  drawNarutoCleanWhiskers(fr, size);
+
+  // 7. 6-Rivet Headband
+  drawNarutoHeadband(fr, size, false);
+
+  // 8. High-collar jacket
+  drawNarutoJacketCollar(fr, size);
 }
 
 function drawNoir(fr) {
@@ -1118,19 +1104,16 @@ function drawNoir(fr) {
   for (const e of [eyeOf(263, 362, 386, 374), eyeOf(33, 133, 159, 145)]) {
     const gr = e.hw * 1.15;
     ctx.save();
-    // Goggle shadow
     ctx.shadowColor = 'rgba(0,0,0,0.85)';
     ctx.shadowBlur = 8;
     ctx.fillStyle = '#060608';
     ctx.beginPath(); ctx.arc(e.c[0], e.c[1], gr * 1.18, 0, 7); ctx.fill();
 
-    // Brass/leather rim
     ctx.fillStyle = '#222026';
     ctx.beginPath(); ctx.arc(e.c[0], e.c[1], gr * 1.12, 0, 7); ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1.5; ctx.stroke();
 
-    // Goggle lens with warm amber/white glow
     const gg = ctx.createRadialGradient(e.c[0], e.c[1], gr * 0.2, e.c[0], e.c[1], gr);
     gg.addColorStop(0, '#fffbe6');
     gg.addColorStop(0.5, '#e8d28a');
@@ -1138,7 +1121,6 @@ function drawNoir(fr) {
     ctx.fillStyle = gg;
     ctx.beginPath(); ctx.arc(e.c[0], e.c[1], gr * 0.88, 0, 7); ctx.fill();
 
-    // Specular shine across lens
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.beginPath();
     ctx.ellipse(e.c[0] - gr * 0.25, e.c[1] - gr * 0.25, gr * 0.42, gr * 0.22, -0.6, 0, 7);
@@ -1179,7 +1161,7 @@ function draw(now) {
     if (now - faceSeen <= FACE_LOST_MS) {
       const fr = faceFrame();
       ctx.lineJoin = 'round';
-      [drawHero, drawNaruto, drawSharingan, drawNoir][look](fr);
+      [drawHero, drawNarutoClassic, drawNarutoSage, drawNoir][look](fr);
     }
     ctx.restore();
     if (win.state !== 'full') {
