@@ -37,6 +37,9 @@
     padding: 0 16px calc(14px + env(safe-area-inset-bottom)); pointer-events: none; }
   #hud[hidden] { display: none; }
   #hint { background: var(--panel); padding: 6px 12px; border-radius: 6px; text-align: center; max-width: 100%; }
+  #readout { position: fixed; top: 12px; left: 12px; background: var(--panel); padding: 4px 10px; border-radius: 6px;
+    font: 600 12px/1.4 ui-monospace, Consolas, monospace; letter-spacing: .02em; color: #9ff3c8; }
+  #readout:empty { display: none; }
   .bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; background: var(--panel); border: 1px solid var(--line);
     border-radius: 10px; padding: 6px; pointer-events: auto; max-width: 100%; }
   .bar button { background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 8px 12px; min-height: 40px; }
@@ -59,7 +62,7 @@
   <div class="card">
     <div class="slit"></div>
     <h1>Hand Window</h1>
-    <p>Stretch a window between your hands. Inside it, your face becomes an Iron Man helmet, or your eyes take on a new power.</p>
+    <p>Stretch a window between your hands. Inside it, the world turns anime, comic or thermal, your face becomes a hero mask, or your eyes take on a new power. Friends can frame their own window at the same time.</p>
     <ul class="steps">
       <li><b>Pinch both hands</b><span>a thin band opens between them</span></li>
       <li><b>Open and spread</b><span>the band widens, then takes over the frame</span></li>
@@ -75,6 +78,7 @@
 <div id="status" hidden><span id="statusText"></span><button id="retry" hidden>Retry</button></div>
 <div id="hud" hidden>
   <div id="hint" aria-live="polite"></div>
+  <div id="readout"></div>
   <div class="bar" role="toolbar" aria-label="Controls">
     <button data-look="0" aria-pressed="true">Iron Man</button>
     <button data-look="1" aria-pressed="false">Sharingan</button>
@@ -82,6 +86,8 @@
     <button data-look="3" aria-pressed="false">Rinnegan</button>
     <button data-look="4" aria-pressed="false">Her eyes</button>
     <button data-look="5" aria-pressed="false">Spider-Man</button>
+    <button data-look="6" aria-pressed="false">Anime</button>
+    <button data-look="7" aria-pressed="false">Heatmap</button>
     <button id="loadEyes" type="button">Load eyes…</button>
     <input id="eyesFile" type="file" accept="image/*" hidden>
     <span class="sep"></span>
@@ -101,7 +107,7 @@ const PINCH_RATIO = 0.35;      // thumb-index gap / palm length
 const TAKEOVER_AREA = 0.18;    // share of the frame the window must cover
 const HAND_LOST_MS = 350;
 const FACE_LOST_MS = 500;
-const LOOKS = ['Iron Man', 'Sharingan', 'Sage Mode', 'Rinnegan', 'Her eyes', 'Spider-Man'];
+const LOOKS = ['Iron Man', 'Sharingan', 'Sage Mode', 'Rinnegan', 'Her eyes', 'Spider-Man', 'Anime', 'Heatmap'];
 
 const $ = id => document.getElementById(id);
 const stage = $('stage');
@@ -128,7 +134,7 @@ const HAND_IDX = [0, 4, 8, 9];
 
 const faceTgt = new Float32Array(478 * 2), faceCur = new Float32Array(478 * 2);
 let faceSeen = -1e9;
-const slots = [newSlot(), newSlot()];
+const slots = [newSlot(), newSlot(), newSlot(), newSlot()];   // 0-1 main window, 2-3 a second person's
 function newSlot() { return { seen: -1e9, tgt: {}, cur: {} }; }
 
 function setFace(lm, now) {           // lm: index -> {x,y} normalised, unmirrored
@@ -160,9 +166,11 @@ function setHands(list, now) {        // list: array of landmark arrays/maps, no
     if (now - slot.seen > staleAfter(HAND_LOST_MS)) for (const i of HAND_IDX) slot.cur[i] = [...m[i]];
     slot.tgt = m; slot.seen = now;
   };
-  if (mapped.length >= 2) { put(slots[0], mapped[0]); put(slots[1], mapped[mapped.length - 1]); }
+  // Four hands: two people side by side, each framing their own window (left pair drives the main one).
+  if (mapped.length >= 4) mapped.slice(0, 4).forEach((m, i) => put(slots[i], m));
+  else if (mapped.length >= 2) { put(slots[0], mapped[0]); put(slots[1], mapped[mapped.length - 1]); }
   else if (mapped.length === 1) {
-    const live = slots.map(s => now - s.seen <= staleAfter(HAND_LOST_MS) ? dist(s.tgt[0], mapped[0][0]) : Infinity);
+    const live = slots.slice(0, 2).map(s => now - s.seen <= staleAfter(HAND_LOST_MS) ? dist(s.tgt[0], mapped[0][0]) : Infinity);
     const i = live[0] === Infinity && live[1] === Infinity ? (mapped[0][0][0] < W / 2 ? 0 : 1) : (live[0] <= live[1] ? 0 : 1);
     put(slots[i], mapped[0]);
   }
@@ -185,24 +193,27 @@ function smooth() {
 }
 
 const F = i => [faceCur[i * 2], faceCur[i * 2 + 1]];
-const handsPresent = now => slots.every(s => now - s.seen <= staleAfter(HAND_LOST_MS));
+const fresh = (s, now, ms = HAND_LOST_MS) => now - s.seen <= staleAfter(ms);
+const handsPresent = now => fresh(slots[0], now) && fresh(slots[1], now);
 const isPinched = s => dist(s.tgt[4], s.tgt[8]) / Math.max(1, dist(s.tgt[0], s.tgt[9])) < PINCH_RATIO;
-const bothPinched = now => handGap > 0 && slots.every(s => now - s.seen <= staleAfter(200) && isPinched(s));   // one result alone gives no gap to judge by
+const bothPinched = now => handGap > 0 && slots.slice(0, 2).every(s => fresh(s, now, 200) && isPinched(s));   // one result alone gives no gap to judge by
 
 /* ---------- window state machine ---------- */
 
 const win = { state: 'idle', t0: 0, from: null, q: null, pinchSince: null };
 
-function liveQuad() {
+function liveQuad(l = slots[0], r = slots[1]) {
   const edge = s => {
     const a = s.cur[4], b = s.cur[8];
     let [top, bot] = a[1] <= b[1] ? [[...a], [...b]] : [[...b], [...a]];
     if (bot[1] - top[1] < 8) { const m = (top[1] + bot[1]) / 2; top[1] = m - 4; bot[1] = m + 4; }
     return [top, bot];
   };
-  const [lt, lb] = edge(slots[0]), [rt, rb] = edge(slots[1]);
+  const [lt, lb] = edge(l), [rt, rb] = edge(r);
   return [lt, rt, rb, lb];
 }
+// A second person's window: shown whenever both of their hands are tracked.
+const extraQuad = now => fresh(slots[2], now) && fresh(slots[3], now) && slots[2].cur[4] && slots[3].cur[4] ? liveQuad(slots[2], slots[3]) : null;
 function quadArea(q) {
   let a = 0;
   for (let i = 0; i < 4; i++) { const p = q[i], n = q[(i + 1) % 4]; a += p[0] * n[1] - n[0] * p[1]; }
@@ -290,12 +301,60 @@ const styl = (() => {
       float L(vec3 c) { return dot(c, vec3(.299, .587, .114)); }
       vec3 S(vec2 d) { return texture(tex, v + d * px).rgb; }
       vec3 sat(vec3 c, float s) { return mix(vec3(L(c)), c, s); }
+      // Edge-preserving blur: flattens skin and walls into paint while keeping outlines crisp.
+      vec3 smoothB(float r) {
+        vec3 c0 = S(vec2(0.0)), acc = c0; float wsum = 1.0;
+        for (int i = 0; i < 12; i++) {
+          float a = float(i) * 0.5236, k = (i % 2 == 0) ? r : r * 0.5;
+          vec3 s = S(vec2(cos(a), sin(a)) * k);
+          float w = exp(-dot(s - c0, s - c0) * 30.0);
+          acc += s * w; wsum += w;
+        }
+        return acc / wsum;
+      }
+      float sobel(float r) {
+        float tl = L(S(vec2(-r, -r))), t = L(S(vec2(0, -r))), tr = L(S(vec2(r, -r)));
+        float ml = L(S(vec2(-r, 0))), mr = L(S(vec2(r, 0)));
+        float bl = L(S(vec2(-r, r))), b = L(S(vec2(0, r))), br = L(S(vec2(r, r)));
+        float gx = tr + 2.0 * mr + br - tl - 2.0 * ml - bl, gy = bl + 2.0 * b + br - tl - 2.0 * t - tr;
+        return length(vec2(gx, gy));
+      }
+      // Cel shading: smooth, saturate, band the light, ink the edges.
+      vec3 cel(float levels, float satK, float inkK, float inkA) {
+        vec3 c = sat(smoothB(3.0), satK);
+        c = pow(max(c, 0.0), vec3(0.85));
+        float l = max(L(c), 1e-3), ql = (floor(l * levels) + 0.5) / levels;
+        c *= mix(1.0, ql / l, 0.7);
+        float e = smoothstep(inkK, inkK + 0.22, sobel(1.5));
+        return mix(c, vec3(0.06, 0.04, 0.08), e * inkA);
+      }
+      vec3 thermal(float t) {
+        vec3 a = vec3(0.0, 0.0, 0.05), b = vec3(0.12, 0.05, 0.6), p = vec3(0.55, 0.0, 0.65), r = vec3(0.95, 0.1, 0.15);
+        vec3 or = vec3(1.0, 0.55, 0.0), y = vec3(1.0, 0.95, 0.2), w = vec3(1.0);
+        if (t < 0.17) return mix(a, b, t / 0.17);
+        if (t < 0.34) return mix(b, p, (t - 0.17) / 0.17);
+        if (t < 0.5) return mix(p, r, (t - 0.34) / 0.16);
+        if (t < 0.66) return mix(r, or, (t - 0.5) / 0.16);
+        if (t < 0.84) return mix(or, y, (t - 0.66) / 0.18);
+        return mix(y, w, (t - 0.84) / 0.16);
+      }
       void main() {
         vec3 c = S(vec2(0.0));
         float l = L(c);
         float dist = length(v - 0.5);
         float vign = 1.0 - smoothstep(0.40, 0.96, dist) * 0.28;
-        if (look == 0 || look == 5) {
+        if (look == 6) {
+          // Anime: flat painted colour, banded light, dark ink lines, warm cel tint.
+          o = vec4(clamp(cel(5.0, 1.45, 0.18, 0.9) * vec3(1.04, 1.0, 0.95), 0.0, 1.0), 1.0);
+        } else if (look == 7) {
+          // Heatmap: brightness as heat, warm skin glows against a cool room.
+          vec3 b = (S(vec2(-2, -2)) + S(vec2(2, -2)) + S(vec2(-2, 2)) + S(vec2(2, 2)) + c * 2.0) / 6.0;
+          float t = clamp(pow(L(b), 0.9) * 1.1, 0.0, 1.0);
+          o = vec4(thermal(t) * vign, 1.0);
+        } else if (look == 0) {
+          // Comic Iron Man: painted world with fewer bands and lighter ink.
+          o = vec4(clamp(cel(6.0, 1.25, 0.26, 0.6) * vign, 0.0, 1.0), 1.0);
+        } else if (look == 5) {
           // Iron Man (MCU Stark Industries): High-Tech Cinematic Live-Action Grade
           // High dynamic range contrast, deep metallic shadows, vibrant crimson & gold grading, subtle film grain
           vec3 graded = sat(c, 1.20);
@@ -332,7 +391,8 @@ const styl = (() => {
     } catch (e) { console.warn('Stylise shader unavailable, using canvas filters', e); }
   }
   const flat = document.createElement('canvas'), fctx = flat.getContext('2d');
-  const FILTERS = ['contrast(1.15) saturate(1.22)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.15) saturate(1.22)'];
+  const FILTERS = ['contrast(1.15) saturate(1.22)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.15) saturate(1.22)',
+    'contrast(1.3) saturate(1.6) brightness(1.05)', 'grayscale(1) contrast(1.4) sepia(1) hue-rotate(-50deg) saturate(4)'];
   return {
     get gl() { return ok; },
     render(el, w, h, which) {
@@ -456,7 +516,8 @@ function drawIronMan(fr) {
   ctx.fillStyle = g; ctx.fill();
 
   // The real face's light and shadow, so the metal turns and catches light the way the head does.
-  ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = .85;
+  // Kept light: comic paint reads as flat colour with a hint of form, not chrome.
+  ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = .5;
   ctx.drawImage(faceLight(), 0, 0, W, H);
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
@@ -465,14 +526,10 @@ function drawIronMan(fr) {
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.6, 'rgba(0,0,0,.1)'); g.addColorStop(1, 'rgba(0,0,0,.75)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
-  // The room reflected in the paint: a low-res, saturated copy of the frame, upscaled so it blurs for free.
-  const ew = W >> 4, eh = H >> 4;
-  if (env.width !== ew || env.height !== eh) { env.width = ew; env.height = eh; }
-  ectx.filter = 'saturate(1.6) contrast(1.2)';
-  ectx.setTransform(-1, 0, 0, 1, ew, 0); ectx.drawImage(source.el, 0, 0, ew, eh);
-  ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = .4;
-  ctx.drawImage(env, 0, 0, W, H);
-  ctx.globalAlpha = 1;
+  // Cel shadow: a hard-edged dark side, the way a colourist blocks in shade.
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgba(90,20,30,.45)';
+  smoothClosed([P(.35, -1.9), P(1.3, -1), P(1.3, .3), P(.6, 1.05), P(.42, .4), P(.55, -.6)]); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
 
   // Clearcoat: one sharp streak across the dome, like a light box in the lacquer.
   ctx.globalCompositeOperation = 'screen';
@@ -523,6 +580,11 @@ function drawIronMan(fr) {
   ctx.filter = `blur(${Math.round(size * .035)}px)`;
   ctx.lineWidth = size * .14; ctx.strokeStyle = 'rgba(15,2,0,.6)'; smoothClosed(head); ctx.stroke();
   ctx.restore();
+
+  // Comic ink: a heavy line around the head and plate.
+  ctx.lineJoin = 'round'; ctx.strokeStyle = '#0b0608';
+  ctx.lineWidth = size * .05; smoothClosed(head); ctx.stroke();
+  ctx.lineWidth = size * .018; trace(plate); ctx.stroke();
 
   // Eye slits: angular, recessed, then glowing with light spilling onto the plate.
   const eyes = [slit(F(133), F(33), F(159), F(145), size), slit(F(362), F(263), F(386), F(374), size)];
@@ -602,6 +664,20 @@ function spiderLens(outer, inner, up, down, fr, size) {
   ctx.lineWidth = hw * .12; ctx.strokeStyle = 'rgba(0,0,0,.4)'; shape(.8); ctx.stroke();
   ctx.restore();
 }
+
+// Anime: the shader paints the scene; the face gets the whisker marks of a fox-spirit ninja.
+function drawAnime(fr) {
+  const size = Math.hypot(fr.ux[0], fr.ux[1]) * 2;
+  if (size < 30) return;
+  ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(25,12,14,.85)'; ctx.lineWidth = Math.max(1.5, size * .012);
+  ctx.beginPath();
+  for (const sx of [-1, 1]) for (const fy of [.12, .25, .38]) {
+    ctx.moveTo(...fr.at(sx * .35, fy)); ctx.quadraticCurveTo(...fr.at(sx * .55, fy - .02), ...fr.at(sx * .75, fy + (fy - .25) * .4));
+  }
+  ctx.stroke();
+}
+// Heatmap is all shader.
+function drawHeat() {}
 
 function drawSpiderMan(fr) {
   const size = Math.hypot(fr.ux[0], fr.ux[1]) * 2;
@@ -990,15 +1066,24 @@ function draw(now) {
 
   if (win.q) {
     const painted = styl.render(el, W, H, look);
+    // A second pair of hands frames its own window; both share one clip so the look spans them.
+    const xq = win.state === 'full' ? null : extraQuad(now);
     ctx.save();
-    trace(win.q); ctx.clip();
+    trace(win.q);
+    if (xq) xq.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)), ctx.closePath();
+    ctx.clip('nonzero');
     ctx.drawImage(painted, 0, 0, W, H);
     if (now - faceSeen <= FACE_LOST_MS) {
       const fr = faceFrame();
       ctx.lineJoin = 'round';
-      [drawIronMan, drawSharingan, drawSage, drawRinnegan, drawBorrowed, drawSpiderMan][look](fr);
+      [drawIronMan, drawSharingan, drawSage, drawRinnegan, drawBorrowed, drawSpiderMan, drawAnime, drawHeat][look](fr);
     }
     ctx.restore();
+    if (xq) {
+      trace(xq); ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(3, W * .004); ctx.strokeStyle = '#000'; ctx.stroke();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.stroke();
+    }
     if (win.state !== 'full') {
       trace(win.q); ctx.lineJoin = 'round';
       ctx.lineWidth = Math.max(3, W * .004); ctx.strokeStyle = '#000'; ctx.stroke();
@@ -1063,7 +1148,7 @@ async function loadTrackers() {
   try {
     const { FilesetResolver, HandLandmarker, FaceLandmarker } = await import(`${VISION}/vision_bundle.mjs`);
     const fileset = await FilesetResolver.forVisionTasks(`${VISION}/wasm`);
-    tr.hand = await create(HandLandmarker, fileset, HAND_MODEL, { numHands: 2 });
+    tr.hand = await create(HandLandmarker, fileset, HAND_MODEL, { numHands: 4 });
     tr.face = await create(FaceLandmarker, fileset, FACE_MODEL, { numFaces: 1 });
     tr.FaceLandmarker = FaceLandmarker; tr.fileset = fileset;
     tr.status = 'ready';
@@ -1244,7 +1329,17 @@ function tick(now) {
   const dt = now - lastFrame; lastFrame = now;
   if (dt > 42 && dt < 250) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
   if (slowFrames > 90 && maxWidth > 854 && !rec.mr) { maxWidth = 854; slowFrames = 0; fitStage(); }
+
+  // Live readout, like a lab instrument: who is framing, how fast, on what.
+  if (dt > 0 && dt < 250) fps += (1000 / dt - fps) * .1;
+  if (now >= readoutAt) {
+    readoutAt = now + 250;
+    const visible = slots.filter(s => fresh(s, now)).length;
+    const framed = Math.min(visible, (win.q ? 2 : 0) + (win.q && extraQuad(now) ? 2 : 0));
+    $('readout').textContent = `Framing ${framed}/${visible} hands · ${Math.round(fps)} FPS · ${tr.delegate || '…'} · ${LOOKS[look]}`;
+  }
 }
+let fps = 0, readoutAt = 0;
 
 function setStatus(text, canRetry = false) {
   $('status').hidden = !text;
@@ -1357,7 +1452,7 @@ addEventListener('keydown', e => {
   if (k === ' ') {
     if (e.target.tagName === 'BUTTON') return;
     e.preventDefault(); setLook((look + 1) % LOOKS.length);
-  } else if (k >= '1' && k <= '5') setLook(+k - 1);
+  } else if (k >= '1' && k <= String(LOOKS.length)) setLook(+k - 1);
   else if (k === 't') toggleFull();
   else if (k === 'r') toggleRecord();
 });
