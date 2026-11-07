@@ -81,6 +81,7 @@
     <button data-look="2" aria-pressed="false">Sage Mode</button>
     <button data-look="3" aria-pressed="false">Rinnegan</button>
     <button data-look="4" aria-pressed="false">Her eyes</button>
+    <button data-look="5" aria-pressed="false">Spider-Man</button>
     <button id="loadEyes" type="button">Load eyes…</button>
     <input id="eyesFile" type="file" accept="image/*" hidden>
     <span class="sep"></span>
@@ -100,7 +101,7 @@ const PINCH_RATIO = 0.35;      // thumb-index gap / palm length
 const TAKEOVER_AREA = 0.18;    // share of the frame the window must cover
 const HAND_LOST_MS = 350;
 const FACE_LOST_MS = 500;
-const LOOKS = ['Iron Man', 'Sharingan', 'Sage Mode', 'Rinnegan', 'Her eyes'];
+const LOOKS = ['Iron Man', 'Sharingan', 'Sage Mode', 'Rinnegan', 'Her eyes', 'Spider-Man'];
 
 const $ = id => document.getElementById(id);
 const stage = $('stage');
@@ -294,7 +295,7 @@ const styl = (() => {
         float l = L(c);
         float dist = length(v - 0.5);
         float vign = 1.0 - smoothstep(0.40, 0.96, dist) * 0.28;
-        if (look == 0) {
+        if (look == 0 || look == 5) {
           // Iron Man (MCU Stark Industries): High-Tech Cinematic Live-Action Grade
           // High dynamic range contrast, deep metallic shadows, vibrant crimson & gold grading, subtle film grain
           vec3 graded = sat(c, 1.20);
@@ -331,7 +332,7 @@ const styl = (() => {
     } catch (e) { console.warn('Stylise shader unavailable, using canvas filters', e); }
   }
   const flat = document.createElement('canvas'), fctx = flat.getContext('2d');
-  const FILTERS = ['contrast(1.15) saturate(1.22)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)'];
+  const FILTERS = ['contrast(1.15) saturate(1.22)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.05) saturate(1.08)', 'contrast(1.15) saturate(1.22)'];
   return {
     get gl() { return ok; },
     render(el, w, h, which) {
@@ -379,6 +380,7 @@ const grow = (pts, c, k) => pts.map(p => [c[0] + (p[0] - c[0]) * k, c[1] + (p[1]
 
 // A low-res copy of the frame: upscaling it blurs away skin texture but keeps the real light and shadow.
 const shade = document.createElement('canvas'), sctx = shade.getContext('2d');
+const env = document.createElement('canvas'), ectx = env.getContext('2d');
 function shadeFrame() {
   const w = Math.max(64, W >> 3), h = Math.max(36, H >> 3);
   if (shade.width !== w || shade.height !== h) { shade.width = w; shade.height = h; }
@@ -429,6 +431,22 @@ function drawIronMan(fr) {
   g.addColorStop(0, 'rgba(0,0,0,.65)'); g.addColorStop(.22, 'rgba(0,0,0,0)'); g.addColorStop(.78, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.7)');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
+  // The room reflected in the paint: a low-res, saturated copy of the frame, upscaled so it blurs for free.
+  const ew = W >> 4, eh = H >> 4;
+  if (env.width !== ew || env.height !== eh) { env.width = ew; env.height = eh; }
+  ectx.filter = 'saturate(1.6) contrast(1.2)';
+  ectx.setTransform(-1, 0, 0, 1, ew, 0); ectx.drawImage(source.el, 0, 0, ew, eh);
+  ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = .4;
+  ctx.drawImage(env, 0, 0, W, H);
+  ctx.globalAlpha = 1;
+
+  // Clearcoat: one sharp streak across the forehead, like a light box in the lacquer.
+  ctx.globalCompositeOperation = 'screen';
+  g = ctx.createLinearGradient(...fr.at(-.2, -.98), ...fr.at(-.12, -.78));
+  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.45, 'rgba(255,250,240,.7)'); g.addColorStop(.55, 'rgba(255,250,240,.7)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  smoothClosed([fr.at(-.62, -.78), fr.at(-.1, -.98), fr.at(.35, -.9), fr.at(-.05, -.8)]); ctx.fill();
+
   // Speculars: forehead, cheekbones and nose bridge.
   ctx.globalCompositeOperation = 'screen';
   for (const [fx, fy, r, a] of [[-.25, -.72, .32, .55], [-.45, .12, .22, .35], [.45, .12, .18, .2], [0, -.12, .12, .45]]) {
@@ -452,6 +470,12 @@ function drawIronMan(fr) {
   seam(() => trace([fr.at(.7, -.05), fr.at(1.1, .05)], false));
   seam(() => trace([fr.at(-.36, .74), fr.at(-.62, 1.0)], false));
   seam(() => trace([fr.at(.36, .74), fr.at(.62, 1.0)], false));
+  // Angular cheek panels under each eye and the brow ridge, as on the Mark armour.
+  for (const sx of [-1, 1]) {
+    seam(() => trace([fr.at(sx * .12, -.2), fr.at(sx * .28, .18), fr.at(sx * .6, .3)], false));
+    seam(() => trace([fr.at(sx * .2, .38), fr.at(sx * .3, .62)], false));
+    seam(() => trace([fr.at(sx * .08, -.5), fr.at(sx * .5, -.42)], false));
+  }
 
   // Mouth slit.
   const m0 = F(61), m1 = F(291), mc = mid(F(13), F(14));
@@ -460,18 +484,31 @@ function drawIronMan(fr) {
   ctx.lineWidth = size * .004; ctx.strokeStyle = 'rgba(255,220,160,.35)';
   ctx.save(); ctx.translate(0, size * .009); trace(mouth, false); ctx.stroke(); ctx.restore();
 
-  // Eye slits: recessed, then glowing.
+  // Ambient occlusion where the helmet curves away from the camera.
+  ctx.save();
+  ctx.filter = `blur(${Math.round(size * .03)}px)`;
+  ctx.lineWidth = size * .12; ctx.strokeStyle = 'rgba(15,2,0,.55)'; smoothClosed(helmet); ctx.stroke();
+  ctx.restore();
+
+  // Eye slits: angular, recessed, then glowing with light spilling onto the plate.
   const eyes = [slit(F(133), F(33), F(159), F(145), size), slit(F(362), F(263), F(386), F(374), size)];
   for (const s of eyes) {
-    ctx.fillStyle = 'rgba(10,4,2,.95)'; smoothClosed(grow(s, mid(s[0], s[2]), 1.28)); ctx.fill();
+    ctx.fillStyle = 'rgba(10,4,2,.95)'; trace(grow(s, mid(s[0], s[2]), 1.28)); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'screen';
+  for (const s of eyes) {
+    const c = mid(s[0], s[2]);
+    g = ctx.createRadialGradient(...c, 0, ...c, size * .2);
+    g.addColorStop(0, 'rgba(110,210,255,.45)'); g.addColorStop(1, 'rgba(110,210,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
   ctx.globalCompositeOperation = 'lighter';
-  ctx.shadowColor = 'rgba(120,220,255,.95)'; ctx.shadowBlur = size * .09;
+  ctx.shadowColor = 'rgba(120,220,255,1)'; ctx.shadowBlur = size * .12;
   for (const s of eyes) {
     const c = mid(s[0], s[2]);
     g = ctx.createRadialGradient(...c, 0, ...c, dist(s[0], s[2]) * .6);
     g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.5, 'rgba(200,245,255,.95)'); g.addColorStop(1, 'rgba(90,200,255,.8)');
-    ctx.fillStyle = g; smoothClosed(s); ctx.fill();
+    ctx.fillStyle = g; trace(s); ctx.fill(); ctx.fill();
   }
   ctx.restore();
 
@@ -482,6 +519,110 @@ function drawIronMan(fr) {
   ctx.restore();
 }
 const lerpPt = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t)];
+
+/* ---------- Spider-Man: a fabric mask with raised webbing, lit by the real face ---------- */
+
+// A tiny repeating weave so the red reads as suit fabric, not paint.
+const weave = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 6;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(0, 0, 3, 3); x.fillRect(3, 3, 3, 3);
+  x.fillStyle = 'rgba(255,255,255,.06)'; x.fillRect(3, 0, 3, 3);
+  return c;
+})();
+
+function spiderLens(outer, inner, up, down, fr, size) {
+  const c = mid(outer, inner), hw = dist(outer, inner) / 2;
+  const open = Math.min(1, dist(up, down) / (hw * .55));
+  const squint = (1 - lerp(.3, 1, open)) * .38;
+  const lu = [fr.ux[0] / (size / 2), fr.ux[1] / (size / 2)], lv = [-lu[1], lu[0]];
+  const s = Math.sign((c[0] - fr.c[0]) * lu[0] + (c[1] - fr.c[1]) * lu[1]) || 1;   // +x points to the temple
+  const pt = (x, y) => [c[0] + (lu[0] * x * s + lv[0] * y) * hw, c[1] + (lu[1] * x * s + lv[1] * y) * hw];
+  // Big teardrop lens: narrow at the nose, sweeping up and out to the temple.
+  const shape = k => {
+    const q = (x, y) => pt(x * k, y * k);
+    const P = [q(-.75, .15), q(-.15, -1.25 + squint), q(1.78, -1.05 + squint * .8), q(1.48, .75 - squint * .35), q(.42, 1.48 - squint * .55), q(-.45, .95 - squint * .28)];
+    const C = [q(-.55, -.6), q(.8, -1.45 + squint * .8), q(1.88, -.1), q(1.05, 1.58), q(-.1, 1.38), q(-.75, .6)];
+    ctx.beginPath(); ctx.moveTo(...P[0]);
+    for (let i = 0; i < 6; i++) ctx.quadraticCurveTo(...C[i], ...P[(i + 1) % 6]);
+    ctx.closePath();
+  };
+  // Black frame with a drop shadow onto the fabric and a thin bevel highlight.
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = size * .05; ctx.shadowOffsetY = size * .014;
+  ctx.fillStyle = '#07070a'; shape(1); ctx.fill();
+  ctx.restore();
+  ctx.lineWidth = Math.max(1.2, hw * .07); ctx.strokeStyle = 'rgba(255,255,255,.45)'; shape(1); ctx.stroke();
+  // White lens, lit like a curved reflective membrane.
+  ctx.save();
+  shape(.8); ctx.clip();
+  const g = ctx.createLinearGradient(...pt(0, -1.2), ...pt(.4, 1.3));
+  g.addColorStop(0, '#ffffff'); g.addColorStop(.45, '#eef3f8'); g.addColorStop(.8, '#c3cfdc'); g.addColorStop(1, '#8e9db0');
+  ctx.fillStyle = g; ctx.fillRect(c[0] - hw * 3, c[1] - hw * 3, hw * 6, hw * 6);
+  ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = .35;
+  ctx.drawImage(shadeFrame(), 0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  // Fine mesh, then a sky glint sweeping across the top.
+  const step = Math.max(2.5, hw * .1);
+  ctx.fillStyle = 'rgba(40,55,80,.16)'; ctx.beginPath();
+  for (let y = c[1] - hw * 2; y < c[1] + hw * 2; y += step)
+    for (let x = c[0] - hw * 2.5 + (Math.round(y / step) & 1) * step / 2; x < c[0] + hw * 2.5; x += step) ctx.rect(x, y, step * .45, step * .45);
+  ctx.fill();
+  const sky = ctx.createLinearGradient(...pt(-.3, -1), ...pt(.3, .4));
+  sky.addColorStop(0, 'rgba(255,255,255,.9)'); sky.addColorStop(.5, 'rgba(255,255,255,.2)'); sky.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sky; ctx.beginPath(); ctx.moveTo(...pt(-.6, .1)); ctx.quadraticCurveTo(...pt(.3, -.9), ...pt(1.4, -.7)); ctx.quadraticCurveTo(...pt(.4, -.1), ...pt(-.6, .1)); ctx.fill();
+  ctx.lineWidth = hw * .12; ctx.strokeStyle = 'rgba(0,0,0,.4)'; shape(.8); ctx.stroke();
+  ctx.restore();
+}
+
+function drawSpiderMan(fr) {
+  const size = Math.hypot(fr.ux[0], fr.ux[1]) * 2;
+  if (size < 30) return;
+  const mask = grow(OVAL.map(F), fr.c, 1.08);
+
+  ctx.save();
+  smoothClosed(mask); ctx.clip();
+
+  // Carmine fabric, rounder and darker toward the edge of the head.
+  let g = ctx.createRadialGradient(...fr.at(-.1, -.3), size * .08, ...fr.c, size * .8);
+  g.addColorStop(0, '#e01a2c'); g.addColorStop(.5, '#b10d1e'); g.addColorStop(1, '#3a0208');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = ctx.createPattern(weave, 'repeat'); ctx.fillRect(0, 0, W, H);
+
+  // Real face light: the fabric wraps the nose, brows and cheekbones.
+  ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = .9;
+  ctx.drawImage(shadeFrame(), 0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  g = ctx.createLinearGradient(...fr.at(-1.05, 0), ...fr.at(1.05, 0));
+  g.addColorStop(0, 'rgba(0,0,0,.6)'); g.addColorStop(.25, 'rgba(0,0,0,0)'); g.addColorStop(.75, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.65)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // Raised webbing: spokes from between the eyes, sagging arches between them.
+  const o = F(168), rays = grow(OVAL.filter((_, i) => i % 2 === 0).map(F), fr.c, 1.25);
+  const rings = [.13, .25, .38, .52, .67, .83, 1];
+  const web = (style, width, dy) => {
+    ctx.save(); ctx.translate(0, dy);
+    ctx.strokeStyle = style; ctx.lineWidth = width; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const r of rays) { ctx.moveTo(...o); ctx.lineTo(...r); }
+    for (const t of rings) for (let i = 0; i < rays.length; i++) {
+      const a = lerpPt(o, rays[i], t), b = lerpPt(o, rays[(i + 1) % rays.length], t), k = lerpPt(mid(a, b), o, .22);
+      ctx.moveTo(...a); ctx.quadraticCurveTo(...k, ...b);
+    }
+    ctx.stroke(); ctx.restore();
+  };
+  web('rgba(20,0,4,.6)', Math.max(2, size * .011), size * .005);
+  web('#141018', Math.max(1.4, size * .007), 0);
+  web('rgba(255,255,255,.32)', Math.max(.6, size * .0025), -size * .002);
+  ctx.restore();
+
+  // Lenses sit on top of the webbing.
+  spiderLens(F(263), F(362), F(386), F(374), fr, size);
+  spiderLens(F(33), F(133), F(159), F(145), fr, size);
+
+  // A soft dark seam where the mask meets the neck and hair.
+  ctx.lineWidth = size * .016; ctx.strokeStyle = 'rgba(30,0,6,.6)'; smoothClosed(mask); ctx.stroke();
+}
 
 /* ---------- eye modes: drawn onto the real irises, inside the real eyelids ---------- */
 
@@ -587,7 +728,10 @@ const BAND = [...new Set([...EYE_L, ...EYE_R, 468, 469, 470, 471, 472, 473, 474,
   68, 104, 69, 108, 151, 337, 299, 333, 298,            // forehead above the brows
   139, 143, 130, 226, 111, 117, 118, 119, 120, 121, 128, 245,   // around her right eye
   368, 372, 359, 446, 340, 346, 347, 348, 349, 350, 357, 465,   // around her left eye
-  168, 6, 197, 122, 351, 193, 417])];                   // bridge of the nose
+  168, 6, 197, 122, 351, 193, 417,                      // bridge of the nose
+  67, 109, 10, 338, 297,                                // higher forehead, so her frames' top edge fits
+  21, 54, 162, 127, 116, 123, 50, 101, 100, 47, 114, 36,       // her right temple and upper cheek (glasses arm, lens bottom)
+  251, 284, 389, 356, 345, 352, 280, 330, 329, 277, 343, 266])];  // her left temple and upper cheek
 for (const i of BAND) if (!USED.includes(i)) USED.push(i);
 const IRIS_SETS = [[468, [469, 470, 471, 472], 33, 133, 159, 145], [473, [474, 475, 476, 477], 263, 362, 386, 374]];
 
@@ -697,7 +841,7 @@ function drawBorrowed() {
   if (!borrowed.tris) return;
   const S = borrowed.src, D = bandTargets(), eyeW = dist(F(33), F(263));
   if (eyeW < 20) return;
-  const feather = eyeW * .14;
+  const feather = eyeW * .17;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of D) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
   x0 = Math.floor(x0 - 2); y0 = Math.floor(y0 - 2);
@@ -798,7 +942,7 @@ function draw(now) {
     if (now - faceSeen <= FACE_LOST_MS) {
       const fr = faceFrame();
       ctx.lineJoin = 'round';
-      [drawIronMan, drawSharingan, drawSage, drawRinnegan, drawBorrowed][look](fr);
+      [drawIronMan, drawSharingan, drawSage, drawRinnegan, drawBorrowed, drawSpiderMan][look](fr);
     }
     ctx.restore();
     if (win.state !== 'full') {
