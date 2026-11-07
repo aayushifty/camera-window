@@ -591,15 +591,7 @@ async function loadBorrowed(file) {
     const P = i => [lm[i].x * img.width, lm[i].y * img.height];
     borrowed.eyes = [[468, [469, 470, 471, 472], 33, 133], [473, [474, 475, 476, 477], 263, 362]].map(([ic, ring, o, i]) => {
       const c = P(ic), r = Math.max(dist(P(o), P(i)) * .2, ring.reduce((s, k) => s + dist(P(k), c), 0) / ring.length);
-      const out = document.createElement('canvas'), n = out.width = out.height = 160, o2 = out.getContext('2d');
-      // Mirrored to match the mirrored camera, then faded to a soft disc so only the iris carries over.
-      o2.setTransform(-1, 0, 0, 1, n, 0);
-      o2.drawImage(img, c[0] - r * 1.1, c[1] - r * 1.1, r * 2.2, r * 2.2, 0, 0, n, n);
-      o2.setTransform(1, 0, 0, 1, 0, 0); o2.globalCompositeOperation = 'destination-in';
-      const g = o2.createRadialGradient(n / 2, n / 2, n * .36, n / 2, n / 2, n * .46);
-      g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)');
-      o2.fillStyle = g; o2.fillRect(0, 0, n, n);
-      return out;
+      return buildIris(img, c, r, ic);
     });
     borrowed.note = '';
     img.close();
@@ -607,10 +599,83 @@ async function loadBorrowed(file) {
   borrowed.busy = false; updateHint();
 }
 
+// Phone photos rarely give an iris more than ~15px across, so pasting it alone is a blur.
+// Instead: read her iris colours, paint a sharp iris in them, then lay her real pixels over it.
+function buildIris(img, c, r, seed) {
+  const s = 24, probe = document.createElement('canvas'); probe.width = probe.height = s;
+  const p2 = probe.getContext('2d', { willReadFrequently: true });
+  p2.drawImage(img, c[0] - r, c[1] - r, r * 2, r * 2, 0, 0, s, s);
+  const px = p2.getImageData(0, 0, s, s).data, tones = [];
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+    const d = Math.hypot(x + .5 - s / 2, y + .5 - s / 2) / (s / 2);
+    if (d < .35 || d > .9) continue;                       // skip pupil and white of the eye
+    const j = (y * s + x) * 4, L = px[j] * .3 + px[j + 1] * .59 + px[j + 2] * .11;
+    if (L > 185) continue;                                 // skip glare (glasses, catchlights)
+    tones.push([L, px[j], px[j + 1], px[j + 2]]);
+  }
+  if (tones.length < 6) tones.push([60, 92, 60, 40], [40, 60, 38, 24], [90, 130, 90, 60]);
+  tones.sort((a, b) => a[0] - b[0]);
+  const at = q => tones[Math.min(tones.length - 1, Math.floor(q * tones.length))];
+  const rgb = (t, k = 1, a = 1) => `rgba(${t.slice(1).map(v => Math.min(255, v * k | 0))},${a})`;
+  const dark = at(.15), base = at(.5), light = at(.85);
+
+  const n = 256, h = n / 2, R = n * .44, out = document.createElement('canvas');
+  out.width = out.height = n;
+  const o = out.getContext('2d');
+  let rnd = seed * 9301 + 49297;
+  const rand = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647;
+
+  let g = o.createRadialGradient(h, h, R * .28, h, h, R);
+  g.addColorStop(0, rgb(light, 1.1)); g.addColorStop(.45, rgb(base, 1.05)); g.addColorStop(.85, rgb(dark)); g.addColorStop(1, rgb(dark, .45));
+  o.fillStyle = g; o.beginPath(); o.arc(h, h, R, 0, Math.PI * 2); o.fill();
+  // Stroma: wavy radial fibres in her lighter and darker tones.
+  o.lineCap = 'round';
+  for (let k = 0; k < 260; k++) {
+    const a = rand() * Math.PI * 2, r0 = R * (.3 + rand() * .12), r1 = R * (.6 + rand() * .32), bend = (rand() - .5) * .18;
+    o.strokeStyle = rand() < .55 ? rgb(light, 1.25, .18 + rand() * .22) : rgb(dark, .7, .2 + rand() * .25);
+    o.lineWidth = .6 + rand() * 1.6;
+    o.beginPath(); o.moveTo(h + Math.cos(a) * r0, h + Math.sin(a) * r0);
+    o.quadraticCurveTo(h + Math.cos(a + bend) * (r0 + r1) / 2, h + Math.sin(a + bend) * (r0 + r1) / 2, h + Math.cos(a) * r1, h + Math.sin(a) * r1);
+    o.stroke();
+  }
+  // Collarette, a few crypts, then the dark limbal ring.
+  o.strokeStyle = rgb(light, 1.3, .35); o.lineWidth = R * .035;
+  o.beginPath();
+  for (let k = 0; k <= 48; k++) { const a = k / 48 * Math.PI * 2, rr = R * (.46 + Math.sin(k * 1.7) * .025); o[k ? 'lineTo' : 'moveTo'](h + Math.cos(a) * rr, h + Math.sin(a) * rr); }
+  o.stroke();
+  for (let k = 0; k < 14; k++) {
+    const a = rand() * Math.PI * 2, rr = R * (.5 + rand() * .3);
+    o.fillStyle = rgb(dark, .5, .35); o.beginPath();
+    o.ellipse(h + Math.cos(a) * rr, h + Math.sin(a) * rr, R * .035, R * .07, a, 0, Math.PI * 2); o.fill();
+  }
+  g = o.createRadialGradient(h, h, R * .8, h, h, R);
+  g.addColorStop(0, 'rgba(8,4,2,0)'); g.addColorStop(1, 'rgba(8,4,2,.85)');
+  o.fillStyle = g; o.fillRect(0, 0, n, n);
+  g = o.createRadialGradient(h, h, R * .24, h, h, R * .31);
+  g.addColorStop(0, '#040202'); g.addColorStop(1, 'rgba(4,2,2,0)');
+  o.fillStyle = g; o.fillRect(0, 0, n, n);
+
+  // Her own pixels on top (mirrored like the camera), so the result keeps her actual shading.
+  o.save();
+  o.beginPath(); o.arc(h, h, R, 0, Math.PI * 2); o.clip();
+  o.setTransform(-1, 0, 0, 1, n, 0); o.imageSmoothingQuality = 'high';
+  o.globalCompositeOperation = 'soft-light'; o.globalAlpha = .7;
+  o.drawImage(img, c[0] - r, c[1] - r, r * 2, r * 2, h - R, h - R, R * 2, R * 2);
+  o.globalCompositeOperation = 'color'; o.globalAlpha = .5;
+  o.drawImage(img, c[0] - r, c[1] - r, r * 2, r * 2, h - R, h - R, R * 2, R * 2);
+  o.restore();
+
+  // Soft edge so it melts into the wearer's sclera.
+  o.globalCompositeOperation = 'destination-in';
+  g = o.createRadialGradient(h, h, R * .9, h, h, R * 1.04);
+  g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  o.fillStyle = g; o.fillRect(0, 0, n, n);
+  return out;
+}
 function drawBorrowed() {
   if (!borrowed.eyes) return;
   onEyes((e, k) => {
-    const src = borrowed.eyes[k], R = e.r * 1.1;
+    const src = borrowed.eyes[k], R = e.r * .5 / .44;   // buildIris puts the iris edge at .44 of the canvas
     ctx.drawImage(src, e.c[0] - R, e.c[1] - R, R * 2, R * 2);
   });
 }
@@ -718,6 +783,8 @@ async function loadTrackers() {
     tr.FaceLandmarker = FaceLandmarker; tr.fileset = fileset;
     tr.status = 'ready';
     setStatus('');
+    // Optional private photo kept next to the app; local/ is git-ignored so it never ships.
+    fetch('local/eyes.png').then(r => r.ok ? r.blob() : null).then(b => b && loadBorrowed(b)).catch(() => {});
   } catch (e) {
     console.error('Tracking failed to load', e);
     tr.status = 'failed'; tr.error = String(e?.message || e);

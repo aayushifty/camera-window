@@ -7,3 +7,6 @@ Thumbs.db
 # Recordings & test outputs
 *.mp4
 *.webm
+
+# Private photos (e.g. borrowed eyes) stay on this machine
+local/
