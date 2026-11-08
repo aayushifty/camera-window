@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Henshin camera",
+  "version": "0.1.0",
+  "description": "Turns your webcam into an anime, shadow or masked hero in video calls. Runs entirely on your computer.",
+  "icons": { "128": "icon.png" },
+  "action": { "default_popup": "popup.html", "default_icon": "icon.png" },
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["wasm/*", "models/*"], "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"] }
+  ]
+}

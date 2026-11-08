@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Henshin</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; width: 240px; padding: 14px 16px; font: 13px/1.45 system-ui, sans-serif; background: #101014; color: #ede6d6; }
+  h1 { margin: 0 0 10px; font-size: 15px; font-weight: 650; }
+  fieldset { border: 0; margin: 0 0 10px; padding: 0; }
+  legend { padding: 0; margin-bottom: 4px; color: #a39d90; }
+  label { display: flex; gap: 8px; align-items: center; padding: 2px 0; cursor: pointer; }
+  input { accent-color: #e0284a; margin: 0; }
+  p { margin: 10px 0 0; color: #a39d90; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Henshin</h1>
+<form id="settings">
+  <fieldset><label><input type="checkbox" name="enabled"> Transform my camera</label></fieldset>
+  <fieldset id="characters"><legend>Character</legend></fieldset>
+  <fieldset>
+    <legend>Show it</legend>
+    <label><input type="radio" name="mode" value="full"> All the time</label>
+    <label><input type="radio" name="mode" value="window"> Only between my pinched hands</label>
+  </fieldset>
+  <fieldset><label><input type="checkbox" name="black"> Black webbing (Web)</label></fieldset>
+</form>
+<p>Changes apply to open calls right away. Turning it on or off fully takes effect when the call restarts the camera.</p>
+<script src="popup.js"></script>
+</body>
+</html>

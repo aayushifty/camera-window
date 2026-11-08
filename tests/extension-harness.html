@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Dev check for the extension's camera swap without a real camera or Chrome install:
+     npm run dev, open /tests/extension-harness.html?char=web -->
+<meta charset="utf-8">
+<title>Extension harness</title>
+<style>body{margin:0;background:#111;color:#ddd;font:13px system-ui}video{width:100%;display:block}#s{padding:8px}</style>
+<div id="s">Starting</div>
+<video id="v" autoplay muted playsinline></video>
+<script type="module">
+  const q = new URLSearchParams(location.search);
+  const root = document.documentElement;
+  root.dataset.henshinBase = '/';
+  root.dataset.henshin = JSON.stringify({ enabled: true, character: q.get('char') || 'void', fullFrame: q.get('mode') !== 'window', webStyle: 0 });
+
+  // fake camera: the test photo drawn into a canvas stream, installed before inject.ts wraps getUserMedia
+  const img = new Image();
+  img.src = '/fixtures/face.jpg';
+  await img.decode();
+  const cam = document.createElement('canvas');
+  cam.width = img.naturalWidth;
+  cam.height = img.naturalHeight;
+  const c = cam.getContext('2d');
+  setInterval(() => c.drawImage(img, 0, 0), 33);
+  const fake = cam.captureStream(30);
+  navigator.mediaDevices.getUserMedia = async () => fake;
+
+  await import('/src/extension/inject.ts');
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  document.getElementById('v').srcObject = stream;
+  window.__harness = { swapped: stream !== fake, tracks: stream.getVideoTracks().length };
+  document.getElementById('s').textContent = `Swapped: ${stream !== fake}. The call would see this:`;
+</script>

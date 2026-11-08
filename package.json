@@ -1,0 +1,25 @@
+{
+  "name": "henshin",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/fetch-models.mjs",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:extension": "tsc --noEmit && node scripts/build-extension.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "postinstall": "node scripts/fetch-models.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.2.0",
+    "@mediapipe/tasks-vision": "^1.2.2"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  }
+}

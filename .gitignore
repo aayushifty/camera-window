@@ -1,0 +1,9 @@
+node_modules
+dist
+public/wasm
+dist-extension
+public/models
+.archify
+docs/*.json
+.ruff_cache
+public/fixtures
