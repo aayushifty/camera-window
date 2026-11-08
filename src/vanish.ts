@@ -275,6 +275,13 @@ export class Vanish {
   private hidePerson(alpha: number): void {
     if (!this.hasFill || alpha <= 0) return;
     const { pfill, fill, mDil } = this.c;
+    if (this.roomLocked) {
+      // a captured room replaces the whole picture: your shadow, and light you block, go with you
+      this.ctx.globalAlpha = alpha;
+      this.ctx.drawImage(fill[0], 0, 0);
+      this.ctx.globalAlpha = 1;
+      return;
+    }
     const pf = pfill[1];
     pf.globalCompositeOperation = 'copy';
     pf.drawImage(fill[0], 0, 0);

@@ -68,7 +68,7 @@ Dev check without a camera: `npm run dev`, then open `/tests/extension-harness.h
 
 ## Snap to vanish
 
-Snap your fingers and you blow away as dust, leaving your room behind. Snap again, or hold an open palm for 2 seconds, to come back. For a clean result, capture your room first (C in the app, or "Capture my room" in the extension popup): you get a 3-second countdown to step out of frame, then the empty room is recorded for a few seconds and locked. Vanishing then shows your real room behind you. Without a capture, the room is learned from whatever the camera sees around you and the rest is filled in.
+Snap your fingers and you blow away as dust, leaving your room behind. Snap again, or hold an open palm for 2 seconds, to come back. For a clean result, capture your room first (C in the app, or "Capture my room" in the extension popup): you get a 3-second countdown to step out of frame, then the empty room is recorded for a few seconds and locked. Vanishing then switches the whole picture to that captured room, so your shadow goes too. Without a capture, the room is learned from whatever the camera sees around you and the rest is filled in.
 
 A snap is judged by speed: thumb and middle finger together, then within about a third of a second far apart with the middle finger curled toward the palm. One frame of each is enough, and a blurred frame in between is fine. Relaxed hands, slowly letting go of a pinch, and opening a fist don't trigger it.
 
