@@ -14,6 +14,8 @@ export interface Mask {
 export interface VisionFrame {
   /** normalized, unmirrored image coords; up to 2 hands × 21 points */
   hands: Pt[][];
+  /** the same hands in metres around the hand's centre (MediaPipe world landmarks), for 3D gestures */
+  world: P3[][];
   /** 478 face landmarks (x, y normalized; z in x units) or null */
   face: P3[] | null;
   /** blendshape name → 0..1 */
@@ -85,6 +87,7 @@ export class Vision {
 
     const hr = this.hand.detectForVideo(src, ts);
     const hands = hr.landmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y })));
+    const world = hr.worldLandmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y, z: p.z })));
     const fr = this.face.detectForVideo(src, ts);
     const fl = fr.faceLandmarks[0];
     const face = fl ? fl.map((p) => ({ x: p.x, y: p.y, z: p.z })) : null;
@@ -92,7 +95,7 @@ export class Vision {
     for (const c of fr.faceBlendshapes[0]?.categories ?? []) shapes[c.categoryName] = c.score;
 
     this.segment(src, w, h, ts, still);
-    const out = { hands, face, shapes, mask: this.mask };
+    const out = { hands, world, face, shapes, mask: this.mask };
     if (still) this.stillCache = out;
     return out;
   }

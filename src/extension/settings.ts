@@ -8,6 +8,8 @@ export interface Settings {
   fullFrame: boolean;
   /** Web look: 0 raised silver webbing, 1 thin black webbing. */
   webStyle: number;
+  /** Snap your fingers to vanish into dust. */
+  snap: boolean;
 }
 
-export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0 };
+export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0, snap: true };

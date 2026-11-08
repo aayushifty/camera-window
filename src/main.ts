@@ -77,6 +77,7 @@ function frame(now: number) {
 
   // fingertip markers while the window is not formed
   mctx.clearRect(0, 0, marks.width, marks.height);
+  engine.drawVanish(mctx, 'screen');
   if (win < 0.6) {
     const a = 1 - win / 0.6;
     const r = 5 * renderer.dpr;
@@ -104,7 +105,10 @@ function frame(now: number) {
   ui.setWindowOpen(win > 0.5);
   const n = hands.length;
   const handsText = n === 0 ? 'No hands in view' : n === 1 ? 'One hand in view' : open ? 'Window open' : 'Pinch both hands to open';
-  ui.setStatus(`${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`);
+  const v = engine.vanish.state;
+  const palm = engine.snap.palmProgress;
+  const vanishText = v === 'gone' ? (palm > 0 ? `Coming back ${Math.round(palm * 100)}%` : 'Vanished. Snap or hold an open palm to come back') : '';
+  ui.setStatus(vanishText || `${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`);
 }
 
 addEventListener('keydown', (e) => {
@@ -115,6 +119,7 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'v' || e.key === 'V') engine.webStyle = 1 - engine.webStyle;
   else if (e.key === 'h' || e.key === 'H') ui.toggleHidden();
   else if (e.key === 's' || e.key === 'S') snapshot();
+  else if (e.key === 'x' || e.key === 'X') engine.toggleVanish();
 });
 
 function snapshot() {
@@ -143,6 +148,8 @@ window.__henshin = {
     face: engine.faceSeen,
     character: CHARACTERS[engine.character]!.id,
     quad: engine.quad,
+    vanish: engine.vanish.state,
+    snapHands: engine.snap.debug.map((f) => ({ pinch: +f.pinch.toFixed(2), slam: +f.slam.toFixed(2), open: f.open })),
     still,
   }),
   setCharacter,

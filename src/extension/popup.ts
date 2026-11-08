@@ -22,6 +22,7 @@ chrome.storage.sync.get(DEFAULTS, (s: Settings) => {
   field('character').value = s.character;
   field('mode').value = s.fullFrame ? 'full' : 'window';
   field('black').checked = s.webStyle === 1;
+  field('snap').checked = s.snap;
 });
 
 form.addEventListener('change', () => {
@@ -30,6 +31,7 @@ form.addEventListener('change', () => {
     character: field('character').value || DEFAULTS.character,
     fullFrame: field('mode').value !== 'window',
     webStyle: field('black').checked ? 1 : 0,
+    snap: field('snap').checked,
   };
   chrome.storage.sync.set(s);
 });

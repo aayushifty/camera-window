@@ -3,6 +3,8 @@ import { BlinkPair, Cover, OneEuro2, WindowGate, blinkShut, eyeOpenness, faceAxe
 import { Renderer, type FaceUniforms } from './renderer';
 import { FaceRig } from './rig';
 import { simHands } from './sim';
+import { SnapDetector } from './snap';
+import { Vanish } from './vanish';
 import type { Src, Vision, VisionFrame } from './vision';
 
 /** Face outline in order, and 5 points along each eyebrow (MediaPipe face mesh indices). */
@@ -21,7 +23,7 @@ function headBox(oval: Pt[], noseX: number): [number, number, number, number] {
 }
 
 type MaskMesh = Parameters<Renderer['draw']>[0]['mask'];
-const NO_VISION: VisionFrame = { hands: [], face: null, shapes: {}, mask: null };
+const NO_VISION: VisionFrame = { hands: [], world: [], face: null, shapes: {}, mask: null };
 
 export interface EngineOptions {
   /** Scripted hands instead of detected ones (?sim=1). hold: frozen with the window open; tall: window over the head. */
@@ -39,6 +41,10 @@ export class Engine {
   webStyle = 0;
   /** Effect over the whole frame without the hand window (video calls). */
   fullFrame = false;
+  /** Snap your fingers to vanish into dust; snap again or hold an open palm to come back. */
+  snapEnabled = true;
+  readonly snap = new SnapDetector();
+  readonly vanish = new Vanish();
   /** Read-outs: hands in device px, window state, face found, frame rate. */
   hands: Pt[][] = [];
   open = false;
@@ -77,6 +83,8 @@ export class Engine {
   /** Key light direction on the face (image space, toward the light; −z = toward the camera). */
   private readonly lctx: CanvasRenderingContext2D;
   private light: [number, number, number] = [-0.25, -0.6, -1];
+  private pendingVanish: 'snap' | 'restore' | null = null;
+  private readonly personCtx = document.createElement('canvas').getContext('2d')!;
 
   constructor(canvas: HTMLCanvasElement, private readonly vision: Vision, private readonly opts: EngineOptions = {}) {
     this.renderer = new Renderer(canvas);
@@ -157,6 +165,12 @@ export class Engine {
 
     const vf = this.vision.ready ? this.vision.process(src, vw, vh, this.still) : NO_VISION;
     cover.update(renderer.canvasWidth, renderer.canvasHeight, vw, vh);
+    if (this.snapEnabled && this.vision.ready && !this.still) {
+      this.vanish.update(src, vw, vh, vf.mask, now);
+      const ev = this.snap.update(vf.world, now, this.vanish.state === 'gone');
+      if (ev === 'snap' && this.vanish.state === 'live') this.pendingVanish = 'snap';
+      else if (ev && this.vanish.state === 'gone') this.pendingVanish = 'restore';
+    }
 
     // face → eyes
     let face: FaceUniforms | null = null;
@@ -271,5 +285,36 @@ export class Engine {
       character: this.character,
       mask: maskMesh,
     });
+    // dust is made from the picture as it looks right now (the character included), so it is read
+    // back from the canvas in the same frame it was drawn
+    if (this.pendingVanish) {
+      const c = this.personCtx;
+      c.canvas.width = vw;
+      c.canvas.height = vh;
+      c.setTransform(-vw / cover.dw, 0, 0, vh / cover.dh, vw + (cover.ox * vw) / cover.dw, (-cover.oy * vh) / cover.dh);
+      c.drawImage(renderer.canvas, 0, 0);
+      if (this.pendingVanish === 'snap') this.vanish.snap(c.canvas);
+      else this.vanish.restore(c.canvas);
+      this.pendingVanish = null;
+    }
+  }
+
+  /** Snap or come back by key/button, same as the gestures. */
+  toggleVanish(): void {
+    if (this.vanish.state === 'live') this.pendingVanish = 'snap';
+    else if (this.vanish.state === 'gone') this.pendingVanish = 'restore';
+  }
+
+  /**
+   * Draw the vanish overlay (room where you stood, and dust) over the picture.
+   * space: 'image' for a canvas in camera orientation, 'screen' for one laid out like the renderer's canvas.
+   */
+  drawVanish(ctx: CanvasRenderingContext2D, space: 'image' | 'screen'): void {
+    if (this.vanish.state === 'live') return;
+    const { cover, vw, vh } = this;
+    if (space === 'screen') ctx.setTransform(-cover.dw / vw, 0, 0, cover.dh / vh, cover.ox + cover.dw, cover.oy);
+    else ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.vanish.layer, 0, 0, vw, vh);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 }

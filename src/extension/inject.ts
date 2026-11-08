@@ -70,9 +70,11 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
       engine.character = Math.max(0, CHARACTERS.findIndex((c) => c.id === s.character));
       engine.fullFrame = s.fullFrame;
       engine.webStyle = s.webStyle;
+      engine.snapEnabled = s.snap;
       engine.step(performance.now());
       ctx.setTransform(-1, 0, 0, 1, w, 0); // drawn mirrored like a selfie view; the call gets the true picture
       ctx.drawImage(engine.renderer.canvas, 0, 0, w, h);
+      engine.drawVanish(ctx, 'image');
     } else {
       ctx.setTransform(1, 0, 0, 1, 0, 0); // off, or models still loading: the plain camera
       ctx.drawImage(video, 0, 0, w, h);
