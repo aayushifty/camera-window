@@ -136,8 +136,9 @@ void lens(inout vec3 col, vec2 L, vec2 c, float side, float open, float px, floa
 void main() {
   vec2 p = screenP();
   float alpha = windowAlpha(p);
-  alpha *= smoothstep(0.4, 0.7, maskAt(p));        // the head, never the background
-  alpha *= smoothstep(0.0, 0.9, 1.0 - vEdge);
+  // the face itself is always covered; the person mask only trims the mesh's outer rim off the background
+  alpha *= max(smoothstep(0.4, 0.7, maskAt(p)), 1.0 - smoothstep(0.6, 0.9, vEdge));
+  alpha *= smoothstep(0.0, 0.2, 1.0 - vEdge);
   if (alpha < 0.003) discard;
 
   vec2 L = vL.xy;
@@ -150,7 +151,7 @@ void main() {
   // fabric: deep red, fine honeycomb, form shading from the room light
   float hx = hexEdge(L * 55.0);
   float cell = 0.8 + 0.3 * smoothstep(0.0, 0.3, hx);               // each hex cell is a small raised bump
-  vec3 col = vec3(0.60, 0.035, 0.08) * cell * (0.94 + 0.12 * (fbm(L * 12.0) - 0.5));
+  vec3 col = vec3(0.40, 0.02, 0.05) * cell * (0.94 + 0.12 * (fbm(L * 12.0) - 0.5));
   col *= 0.3 + 0.55 * diff + 0.15 * (0.5 - 0.5 * n.y);
   // fabric stretched over a real face: take its light and shadow (nose, cheeks, lips, brow) from the camera
   float rp = 0.55 / max(px, 1e-4);                                  // ~half an eye distance, in screen px
@@ -166,7 +167,7 @@ void main() {
     c0 += luma(texture(uVideo, toUV(p + vec2(cos(a), sin(a)) * rp * 0.5)).rgb);
   }
   float shade = clamp((c0 / 6.0) / avg, 0.65, 1.3);
-  col *= mix(1.0, shade, 0.4);
+  col *= mix(1.0, shade, 0.15);                                    // just enough to read the face's shape, never its features
   vec3 hv = normalize(ld + vec3(0.0, 0.0, -1.0));
   col += vec3(1.0, 0.55, 0.5) * pow(max(dot(n, hv), 0.0), 20.0) * 0.16;
   col += vec3(1.0, 0.45, 0.35) * rimL * 0.25;
@@ -188,7 +189,7 @@ void main() {
     float groove = (1.0 - smoothstep(lw, lw * 2.2 + 2.0 * px, d)) - cord;
     float crown = 1.0 - smoothstep(0.0, lw, d);                     // rounded top of the cord catches light
     col = mix(col, col * 0.45, groove * 0.6);
-    vec3 silver = vec3(0.50, 0.50, 0.54) * (0.4 + 0.6 * diff) * mix(1.0, shade, 0.5) + vec3(0.32) * crown * crown * (0.4 + 0.6 * diff);
+    vec3 silver = vec3(0.50, 0.50, 0.54) * (0.4 + 0.6 * diff) * mix(1.0, shade, 0.2) + vec3(0.32) * crown * crown * (0.4 + 0.6 * diff);
     col = mix(col, silver, cord);
   } else {
     float lw = 0.6 * uDpr * px;

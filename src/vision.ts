@@ -37,6 +37,9 @@ export class Vision {
   private stillCache: VisionFrame | null = null;
   /** True once every model has loaded. */
   ready = false;
+  private frameNo = 0;
+  private lastHands: { hands: Pt[][]; world: P3[][] } = { hands: [], world: [] };
+  private maxHands = 2;
 
   /** base: where `wasm/` and `models/` are served (the site root, or the extension's own URL). */
   async init(onStep: (msg: string) => void, base = '/'): Promise<void> {
@@ -85,19 +88,38 @@ export class Vision {
     const ts = Math.max(this.lastTs + 1, performance.now());
     this.lastTs = ts;
 
-    const hr = this.hand.detectForVideo(src, ts);
-    const hands = hr.landmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y })));
-    const world = hr.worldLandmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y, z: p.z })));
+    // The models run back to back on the main thread (~110 ms a frame on integrated graphics), so:
+    // hands every frame while one is tracked, otherwise the costly search for a new hand every 3rd frame;
+    // the person mask every 3rd frame, offset from that search; the face every frame.
+    const n = this.frameNo++;
+    if (still || this.lastHands.hands.length > 0 || n % 3 === 0) {
+      const hr = this.hand.detectForVideo(src, ts);
+      this.lastHands = {
+        hands: hr.landmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y }))),
+        world: hr.worldLandmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y, z: p.z }))),
+      };
+    }
+    const { hands, world } = this.lastHands;
     const fr = this.face.detectForVideo(src, ts);
     const fl = fr.faceLandmarks[0];
     const face = fl ? fl.map((p) => ({ x: p.x, y: p.y, z: p.z })) : null;
     const shapes: Record<string, number> = {};
     for (const c of fr.faceBlendshapes[0]?.categories ?? []) shapes[c.categoryName] = c.score;
 
-    this.segment(src, w, h, ts, still);
+    if (still || !this.mask || n % 3 === 1) this.segment(src, w, h, ts, still);
     const out = { hands, world, face, shapes, mask: this.mask };
     if (still) this.stillCache = out;
     return out;
+  }
+
+  /**
+   * Hands to track: 1 when only snapping (calls), 2 for the hand window. With fewer hands to find,
+   * the hand model stops searching for another one every frame.
+   */
+  setMaxHands(n: 1 | 2): void {
+    if (!this.ready || n === this.maxHands) return;
+    this.maxHands = n;
+    void this.hand.setOptions({ numHands: n });
   }
 
   private segment(src: Src, w: number, h: number, ts: number, still: boolean): void {

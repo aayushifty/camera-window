@@ -163,6 +163,7 @@ export class Engine {
     this.lastT = t;
     this.fps += (1 / Math.max(dt, 1e-3) - this.fps) * 0.05;
 
+    this.vision.setMaxHands(this.fullFrame ? 1 : 2);
     const vf = this.vision.ready ? this.vision.process(src, vw, vh, this.still) : NO_VISION;
     cover.update(renderer.canvasWidth, renderer.canvasHeight, vw, vh);
     if (this.snapEnabled && this.vision.ready && !this.still) {

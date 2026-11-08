@@ -5,7 +5,7 @@
  *   1. contact  — thumb tip pressed on the middle fingertip for 2+ frames, middle finger held away from the palm
  *   2. release  — thumb and middle clearly apart (a wide gap above the contact line, so jitter can't cross it)
  *   3. slam     — the middle fingertip lands on the palm, having dropped a long way since contact
- * and 2+3 within SNAP_WINDOW_MS of the last contact frame. A relaxed hand drifting near
+ * and 2+3 within SNAP.windowMs of the last contact frame. A relaxed hand drifting near
  * the old single threshold, or slowly letting go of a pinch, never fires.
  */
 import type { P3 } from './face';
@@ -18,12 +18,12 @@ const PINKY_MCP = 17, PINKY_PIP = 18, PINKY_TIP = 20;
 
 /** Distances below are in palm lengths (wrist to middle knuckle), so they hold at any hand size or distance. */
 export const SNAP = {
-  contact: 0.3, // thumb–middle gap that counts as pressed together
+  contact: 0.36, // thumb–middle gap that counts as pressed together
   armAway: 0.6, // middle tip must be at least this far from the palm while pressed (rules out fists)
-  release: 0.65, // thumb–middle gap after the snap
-  land: 0.55, // middle tip this close to the palm = landed
+  release: 0.7, // thumb–middle gap after the snap
+  land: 0.7, // middle tip this close to the palm = landed
   drop: 0.3, // how far the middle tip must travel toward the palm
-  windowMs: 300, // release + slam must follow the last contact frame within this
+  windowMs: 450, // release + slam must follow the last contact frame within this
   cooldownMs: 1500,
   palmHoldMs: 2000, // open palm held this long brings you back
 };

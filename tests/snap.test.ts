@@ -41,10 +41,10 @@ function run(frames: P3[][], d = new SnapDetector(), gone = false, t0 = 0) {
 describe('snap gesture', () => {
   it('the fixture poses measure as intended', () => {
     const a = handFeatures(pressed())!, b = handFeatures(landed())!;
-    expect(a.pinch).toBeLessThan(0.3);
+    expect(a.pinch).toBeLessThan(0.36);
     expect(a.slam).toBeGreaterThan(0.6);
-    expect(b.pinch).toBeGreaterThan(0.65);
-    expect(b.slam).toBeLessThan(0.55);
+    expect(b.pinch).toBeGreaterThan(0.7);
+    expect(b.slam).toBeLessThan(0.7);
     expect(handFeatures(openPalm())!.open).toBe(true);
   });
 

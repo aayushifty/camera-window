@@ -413,7 +413,7 @@ float maskGrow(vec2 p, float o) {
  * nz: form factor, 1 facing the camera ... 0 at the silhouette.
  */
 vec3 webFabric(vec2 w, float nz, float unitPx) {
-  vec3 fab = vec3(0.60, 0.035, 0.08) * (0.3 + 0.62 * nz);
+  vec3 fab = vec3(0.40, 0.02, 0.05) * (0.3 + 0.62 * nz);
   fab += vec3(0.9, 0.35, 0.3) * pow(1.0 - nz, 3.0) * 0.12;          // soft rim where the head turns away
   float r = length(w);
   float N = uWebStyle < 0.5 ? 16.0 : 12.0;
@@ -444,7 +444,8 @@ vec3 webChar(vec2 p, vec3 v, float m, float edge, vec2 L) {
     vec2 he = (L - uHead.xy) / uHead.zw;
     float head = 1.0 - smoothstep(0.9, 1.05, length(he));
     float neck = (1.0 - smoothstep(0.45, 0.6, abs(L.x - uHead.x) / uHead.z)) * step(uChin - 1.2, L.y) * step(L.y, 0.0);
-    float hood = smoothstep(0.12, 0.4, mG) * max(head, neck);
+    float core = 1.0 - smoothstep(0.75, 0.95, length(he));            // the head itself: covered even where the person mask is unsure
+    float hood = max(core, smoothstep(0.12, 0.4, mG) * max(head, neck));
     if (hood > 0.0) {
       float nz = sqrt(max(1.0 - dot(he, he), 0.0));
       col = mix(col, webFabric(L - uWebHub, max(nz, 0.25), uS) * uCam, hood);   // no camera detail: no face traces
@@ -454,7 +455,7 @@ vec3 webChar(vec2 p, vec3 v, float m, float edge, vec2 L) {
     if (region > 0.0) {
       float ln = clamp(luma(v) / max(0.42 * luma(uCam), 0.05), 0.0, 1.8);
       float side = smoothstep(1.5, 1.7, abs(L.x)) * smoothstep(uChin - 1.4, uChin - 1.8, L.y);
-      vec3 suit = mix(vec3(0.62, 0.045, 0.09), vec3(0.06, 0.12, 0.36), side) * (0.3 + 0.7 * ln);
+      vec3 suit = mix(vec3(0.42, 0.03, 0.06), vec3(0.04, 0.08, 0.26), side) * (0.3 + 0.7 * ln);
       vec2 w = L - vec2(0.0, uChin - 2.3);
       float r = length(w);
       float sg = 6.2831853 / 18.0;

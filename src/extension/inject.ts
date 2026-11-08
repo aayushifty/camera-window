@@ -65,6 +65,7 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
   let timer = 0;
   const loop = () => {
     if (!running) return;
+    const started = performance.now();
     const s = settings();
     if (s.enabled && v.ready) {
       engine.character = Math.max(0, CHARACTERS.findIndex((c) => c.id === s.character));
@@ -80,7 +81,7 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
       ctx.drawImage(video, 0, 0, w, h);
     }
     // shortcut: timers slow down when the call tab is in the background, so keep the call tab visible
-    timer = window.setTimeout(loop, 1000 / 30);
+    timer = window.setTimeout(loop, Math.max(0, 1000 / 30 - (performance.now() - started)));
   };
   loop();
 

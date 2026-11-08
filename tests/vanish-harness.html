@@ -44,5 +44,5 @@
     engine.drawVanish(o, 'image');
     document.getElementById('s').textContent = `state: ${engine.vanish.state}`;
   }, 33);
-  window.__v = { toggle: () => engine.toggleVanish(), state: () => engine.vanish.state };
+  window.__v = { toggle: () => engine.toggleVanish(), state: () => engine.vanish.state, engine, vision, video };
 </script>
