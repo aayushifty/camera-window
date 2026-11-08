@@ -21,9 +21,9 @@ export const SNAP = {
   contact: 0.36, // thumb–middle gap that counts as pressed together
   armAway: 0.6, // middle tip must be at least this far from the palm while pressed (rules out fists)
   release: 0.7, // thumb–middle gap after the snap
-  land: 0.7, // middle tip this close to the palm = landed
-  drop: 0.3, // how far the middle tip must travel toward the palm
-  windowMs: 450, // release + slam must follow the last contact frame within this
+  land: 0.8, // middle tip this close to the palm = landed
+  drop: 0.25, // how far the middle tip must travel toward the palm
+  windowMs: 600, // release + slam must follow the last contact frame within this
   cooldownMs: 1500,
   palmHoldMs: 2000, // open palm held this long brings you back
 };

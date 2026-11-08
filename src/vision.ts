@@ -38,6 +38,8 @@ export class Vision {
   /** True once every model has loaded. */
   ready = false;
   private frameNo = 0;
+  /** frame a hand was last tracked: a hand lost mid-snap (motion blur) is searched for every frame for a while */
+  private handFrame = -1e9;
   private lastHands: { hands: Pt[][]; world: P3[][] } = { hands: [], world: [] };
   private maxHands = 2;
 
@@ -89,15 +91,17 @@ export class Vision {
     this.lastTs = ts;
 
     // The models run back to back on the main thread (~110 ms a frame on integrated graphics), so:
-    // hands every frame while one is tracked, otherwise the costly search for a new hand every 3rd frame;
+    // hands every frame while one is tracked or was lost in the last ~15 frames, otherwise the costly
+    // search for a new hand every 3rd frame;
     // the person mask every 3rd frame, offset from that search; the face every frame.
     const n = this.frameNo++;
-    if (still || this.lastHands.hands.length > 0 || n % 3 === 0) {
+    if (still || n - this.handFrame <= 15 || n % 3 === 0) {
       const hr = this.hand.detectForVideo(src, ts);
       this.lastHands = {
         hands: hr.landmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y }))),
         world: hr.worldLandmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y, z: p.z }))),
       };
+      if (hr.landmarks.length) this.handFrame = n;
     }
     const { hands, world } = this.lastHands;
     const fr = this.face.detectForVideo(src, ts);

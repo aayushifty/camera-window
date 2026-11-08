@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BlinkPair, Cover, OneEuro2, WindowGate, blinkShut, eyeOpenness, faceAxes, isPinched, windowQuad, type Pt } from '../src/geom';
+import { BlinkPair, Cover, OneEuro2, WindowGate, blinkShut, eyeOpenness, faceAxes, isPinched, smoothLandmarks, windowQuad, type Pt } from '../src/geom';
 
 /** Minimal 21-point hand: wrist, thumb tip, index tip, middle MCP set; rest at wrist. */
 function hand(wrist: Pt, thumb: Pt, index: Pt): Pt[] {
@@ -130,5 +130,16 @@ describe('blink', () => {
     const b = new BlinkPair();
     for (let i = 0; i < 20; i++) b.learn(0.9, 0.9, 0.8, 0.8);
     expect(b.pair(0.1, 0.9)).toEqual([0.9, 0.1]);
+  });
+});
+
+describe('smoothLandmarks', () => {
+  it('holds still points steady but follows fast motion almost at once', () => {
+    const prev = [{ x: 0, y: 0 }];
+    const slow = smoothLandmarks([{ x: 0, y: 0 }], [{ x: 1, y: 0 }], 1 / 15, 0)[0]!.x;
+    const fast = smoothLandmarks(prev, [{ x: 1, y: 0 }], 1 / 15, 3)[0]!.x;
+    expect(slow).toBeGreaterThan(0.2);
+    expect(slow).toBeLessThan(0.5);
+    expect(fast).toBeGreaterThan(0.95);
   });
 });

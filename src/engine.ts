@@ -1,5 +1,5 @@
 import { CHARACTERS } from './characters';
-import { BlinkPair, Cover, OneEuro2, WindowGate, blinkShut, eyeOpenness, faceAxes, isPinched, windowQuad, type Pt } from './geom';
+import { BlinkPair, Cover, OneEuro2, WindowGate, blinkShut, eyeOpenness, faceAxes, isPinched, smoothLandmarks, windowQuad, type Pt } from './geom';
 import { Renderer, type FaceUniforms } from './renderer';
 import { FaceRig } from './rig';
 import { simHands } from './sim';
@@ -84,6 +84,8 @@ export class Engine {
   private readonly lctx: CanvasRenderingContext2D;
   private light: [number, number, number] = [-0.25, -0.6, -1];
   private pendingVanish: 'snap' | 'restore' | null = null;
+  /** Face landmarks smoothed over time for everything drawn on the face (blinks still read the raw ones). */
+  private faceS: { x: number; y: number; z: number }[] = [];
   private readonly personCtx = document.createElement('canvas').getContext('2d')!;
 
   constructor(canvas: HTMLCanvasElement, private readonly vision: Vision, private readonly opts: EngineOptions = {}) {
@@ -182,6 +184,10 @@ export class Engine {
     let eyeDistPx = 0;
     if (vf.face && this.faceSeen) {
       const lm = vf.face;
+      const prevNose = this.faceS[1];
+      const faceW = Math.hypot(lm[454]!.x - lm[234]!.x, lm[454]!.y - lm[234]!.y) || 0.1;
+      const speed = prevNose ? Math.hypot(lm[1]!.x - prevNose.x, lm[1]!.y - prevNose.y) / faceW / Math.max(dt, 1e-3) : 0;
+      const ls = (this.faceS = smoothLandmarks(this.faceS, lm, dt, speed));
       const a = cover.toScreen(lm[468]!), b = cover.toScreen(lm[473]!);
       const oa = eyeOpenness(this.lidRatio(lm, 33, 133, 159, 145));
       const ob = eyeOpenness(this.lidRatio(lm, 263, 362, 386, 374));
@@ -191,7 +197,7 @@ export class Engine {
       this.openL += (tl - this.openL) * Math.min(1, dt * 18);
       this.openR += (tr - this.openR) * Math.min(1, dt * 18);
       const ax = faceAxes(sl, sr);
-      const S = (i: number) => cover.toScreen(lm[i]!);
+      const S = (i: number) => cover.toScreen(ls[i]!);
       const irisR = (c: number) => {
         const o = S(c);
         let r = 0;
@@ -237,7 +243,7 @@ export class Engine {
       if (this.frameNo % 10 === 1) this.sampleFaceLight(src, lm);
       const sq = side('eyeSquint'), wide = side('eyeWide');
       const lens = (i: 0 | 1) => Math.max(0, Math.min(1.2, 1 - shut[i] - 0.2 * sq[i] + 0.25 * wide[i]));
-      if (CHARACTERS[this.character]!.id === 'web') maskMesh = this.rig.mask(lm, vw, vh, cover, [lens(0), lens(1)], this.light, this.webStyle);
+      if (CHARACTERS[this.character]!.id === 'web') maskMesh = this.rig.mask(ls, vw, vh, cover, [lens(0), lens(1)], this.light, this.webStyle);
       eyeCentre = { x: (lm[468]!.x + lm[473]!.x) / 2, y: (lm[468]!.y + lm[473]!.y) / 2 };
       eyeDistPx = d2(this.toPx(lm[468]!), this.toPx(lm[473]!));
     } else {
@@ -257,7 +263,9 @@ export class Engine {
     const both = hands.length >= 2;
     const open = this.gate.update(both, both && hands.every((h) => isPinched(h)), t) || this.fullFrame;
     this.open = open;
-    if (this.fullFrame) {
+    // Web is a mask on the head: once the pinch opens it, it is drawn on the whole head, not cut by the window
+    const headOnly = CHARACTERS[this.character]!.id === 'web';
+    if (this.fullFrame || (headOnly && open)) {
       // just past the canvas edge, so the window's frame line stays out of the picture
       const W = renderer.canvasWidth + 8, H = renderer.canvasHeight + 8;
       this.quad = [{ x: -8, y: -8 }, { x: W, y: -8 }, { x: W, y: H }, { x: -8, y: H }];

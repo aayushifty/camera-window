@@ -435,8 +435,7 @@ vec3 webFabric(vec2 w, float nz, float unitPx) {
 }
 
 vec3 webChar(vec2 p, vec3 v, float m, float edge, vec2 L) {
-  vec3 bg = mix(v, graded(v, vec3(0.95, 0.97, 1.0)), 0.5) * 0.94;   // the real room, lightly graded
-  vec3 col = mix(bg, graded(v, vec3(1.02, 0.95, 0.94)), m);
+  vec3 col = v;                                                     // only the head changes: room and body stay as they are
   if (uFace > 0.5) {
     // hood: every person pixel of the head (hair, ears, neck) becomes fabric; the face mesh draws on top.
     // Centred on the whole head (it shifts away from the nose when the head turns), not between the eyes.
@@ -450,30 +449,6 @@ vec3 webChar(vec2 p, vec3 v, float m, float edge, vec2 L) {
       float nz = sqrt(max(1.0 - dot(he, he), 0.0));
       col = mix(col, webFabric(L - uWebHub, max(nz, 0.25), uS) * uCam, hood);   // no camera detail: no face traces
     }
-    // suit: red chest and shoulders, blue sides, web lines; folds come from the real clothes
-    float region = m * smoothstep(uChin - 0.35, uChin - 0.7, L.y);
-    if (region > 0.0) {
-      float ln = clamp(luma(v) / max(0.42 * luma(uCam), 0.05), 0.0, 1.8);
-      float side = smoothstep(1.5, 1.7, abs(L.x)) * smoothstep(uChin - 1.4, uChin - 1.8, L.y);
-      vec3 suit = mix(vec3(0.42, 0.03, 0.06), vec3(0.04, 0.08, 0.26), side) * (0.3 + 0.7 * ln);
-      vec2 w = L - vec2(0.0, uChin - 2.3);
-      float r = length(w);
-      float sg = 6.2831853 / 18.0;
-      float fk = fract(atan(w.x, w.y) / sg + 0.5);
-      float spoke = min(fk, 1.0 - fk) * sg * r;
-      float reff = r * (1.0 + 0.1 * sin(3.14159 * fk));
-      float ring = abs(fract(reff / 0.38 + 0.5) - 0.5) * 0.38;
-      float px = uDpr / uS;
-      float lines = 1.0 - smoothstep(0.6 * px, 1.6 * px, min(spoke, ring));
-      suit = mix(suit, vec3(0.02, 0.01, 0.015), lines * (1.0 - side) * 0.9);
-      col = mix(col, suit * uCam, region);
-    }
-  } else {
-    // no face found (yet): the person inside the window is still never shown
-    vec2 wc = 0.25 * (uQ[0] + uQ[1] + uQ[2] + uQ[3]);
-    float sc = max(0.5 * length(uQ[3] - uQ[0]), 30.0);
-    float cover = smoothstep(0.12, 0.4, maskGrow(p, 6.0 * uDpr));
-    col = mix(col, webFabric((p - wc) * vec2(1.0, -1.0) / sc, 0.7, sc) * uCam, cover);
   }
   return col;
 }
@@ -506,8 +481,10 @@ void main() {
       vec2 cen = (uQ[0] + uQ[1] + uQ[2] + uQ[3]) * 0.25;
       float span = max(length(uQ[1] - uQ[0]), 1.0);
       float t = dot(p - cen, normalize(vec2(1.0, -0.55))) / span;
-      ch += PAPER * 0.04 * exp(-pow((t + 0.14) * 7.0, 2.0));
-      ch += (hash(p + fract(uTime) * 97.0) - 0.5) * 0.022;
+      if (uChar != 1) {                                             // Web is a mask on the head, not a pane of glass
+        ch += PAPER * 0.04 * exp(-pow((t + 0.14) * 7.0, 2.0));
+        ch += (hash(p + fract(uTime) * 97.0) - 0.5) * 0.022;
+      }
       col = mix(col, ch, inside * uWin);
     }
     float d = abs(sd);

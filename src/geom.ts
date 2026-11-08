@@ -109,6 +109,20 @@ export class BlinkPair {
   }
 }
 
+/**
+ * Smooth a whole landmark set at once, in place into `prev`: strong at rest (no shimmer), almost off
+ * while the head moves (no lag). speed: how fast the set moved, in face widths per second.
+ */
+export function smoothLandmarks<T extends { x: number; y: number }>(prev: T[], raw: T[], dt: number, speed: number): T[] {
+  if (prev.length !== raw.length) return raw.map((p) => ({ ...p }));
+  const a = 1 - Math.exp(-dt * (6 + 60 * speed));
+  for (let i = 0; i < raw.length; i++) {
+    const p = prev[i]!, q = raw[i]!;
+    for (const k of Object.keys(q) as (keyof T)[]) (p[k] as number) += ((q[k] as number) - (p[k] as number)) * a;
+  }
+  return prev;
+}
+
 /** One Euro filter on a 2D point (Casiez et al.): low jitter at rest, low lag in motion. */
 export class OneEuro2 {
   private prev: Pt | null = null;
