@@ -12,6 +12,8 @@ export interface Settings {
   snap: boolean;
   /** Set to Date.now() by the popup's "Capture my room" button; each new value starts one capture. */
   captureAt: number;
+  /** The popup's record button: true while recording; switching it off saves the video file. */
+  recording: boolean;
 }
 
-export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0, snap: true, captureAt: 0 };
+export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0, snap: true, captureAt: 0, recording: false };

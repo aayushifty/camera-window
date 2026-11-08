@@ -25,18 +25,34 @@ chrome.storage.sync.get(DEFAULTS, (s: Settings) => {
   field('snap').checked = s.snap;
 });
 
+const rec = document.getElementById('record') as HTMLButtonElement;
+let recording = false;
+const showRec = () => {
+  rec.textContent = recording ? 'Stop and save video' : 'Start recording';
+  rec.setAttribute('aria-pressed', String(recording));
+};
+chrome.storage.sync.get({ recording: false }, (s: { recording: boolean }) => {
+  recording = s.recording;
+  showRec();
+});
+rec.addEventListener('click', () => {
+  recording = !recording;
+  chrome.storage.sync.set({ recording });
+  showRec();
+});
+
 document.getElementById('capture')!.addEventListener('click', () => {
   chrome.storage.sync.set({ captureAt: Date.now() });
   (document.getElementById('captureNote') as HTMLElement).hidden = false;
 });
 
 form.addEventListener('change', () => {
-  const s: Omit<Settings, 'captureAt'> = {
+  const s: Omit<Settings, 'captureAt' | 'recording'> = {
     enabled: field('enabled').checked,
     character: field('character').value || DEFAULTS.character,
     fullFrame: field('mode').value !== 'window',
     webStyle: field('black').checked ? 1 : 0,
     snap: field('snap').checked,
   };
-  chrome.storage.sync.set(s); // captureAt is left as it is: only the button sets it
+  chrome.storage.sync.set(s); // captureAt and recording are left as they are: only their buttons set them
 });

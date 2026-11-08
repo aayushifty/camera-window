@@ -5,6 +5,7 @@
  */
 import { CHARACTERS } from '../characters';
 import { Engine } from '../engine';
+import { Recorder } from '../recorder';
 import { Vision } from '../vision';
 import { DEFAULTS, type Settings } from './settings';
 
@@ -65,6 +66,9 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
   let timer = 0;
   // a capture pressed before this camera started doesn't count; only new presses of the popup button do
   let seenCapture = settings().captureAt;
+  // likewise only a change of the record button counts
+  let seenRecording = settings().recording;
+  const recorder = new Recorder();
   const loop = () => {
     if (!running) return;
     const started = performance.now();
@@ -88,6 +92,12 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
       ctx.setTransform(1, 0, 0, 1, 0, 0); // off, or models still loading: the plain camera
       ctx.drawImage(video, 0, 0, w, h);
     }
+    if (s.recording !== seenRecording) {
+      seenRecording = s.recording;
+      // what the call sees, plus the call's microphone if this stream carries it
+      if (s.recording) recorder.start(new MediaStream([...out.captureStream(30).getVideoTracks(), ...stream.getAudioTracks()]));
+      else recorder.stop();
+    }
     // shortcut: timers slow down when the call tab is in the background, so keep the call tab visible
     timer = window.setTimeout(loop, Math.max(0, 1000 / 30 - (performance.now() - started)));
   };
@@ -98,6 +108,7 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
   track.stop = () => {
     running = false;
     clearTimeout(timer);
+    recorder.stop(); // the call ended mid-recording: save what there is
     cam.stop();
     stopOut();
   };

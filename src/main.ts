@@ -2,6 +2,7 @@ import '@fontsource-variable/bricolage-grotesque';
 import './styles.css';
 import { CHARACTERS, characterIndex } from './characters';
 import { Engine } from './engine';
+import { Recorder } from './recorder';
 import { isPinched } from './geom';
 import { Ui } from './ui';
 import { Vision } from './vision';
@@ -32,6 +33,18 @@ function setCharacter(i: number) {
   ui.setCharacter(engine.character);
 }
 setCharacter(characterIndex(params.get('char')));
+
+/** R records the picture (effects and overlay, no interface) to a .webm file. */
+const recorder = new Recorder();
+const recCanvas = document.createElement('canvas');
+const rctx = recCanvas.getContext('2d')!;
+function toggleRecording() {
+  if (recorder.recording) return recorder.stop();
+  const k = Math.min(1, 1920 / canvas.width); // at most 1080p-wide, however large the screen
+  recCanvas.width = Math.round(canvas.width * k);
+  recCanvas.height = Math.round(canvas.height * k);
+  recorder.start(recCanvas.captureStream(30));
+}
 
 let ready = false;
 let still = false;
@@ -102,13 +115,19 @@ function frame(now: number) {
     }
   }
 
+  if (recorder.recording) {
+    rctx.drawImage(canvas, 0, 0, recCanvas.width, recCanvas.height); // same frame it was drawn, so WebGL can be read
+    rctx.drawImage(marks, 0, 0, recCanvas.width, recCanvas.height);
+  }
+
   ui.setWindowOpen(win > 0.5);
   const n = hands.length;
   const handsText = n === 0 ? 'No hands in view' : n === 1 ? 'One hand in view' : open ? 'Window open' : 'Pinch both hands to open';
   const v = engine.vanish.state;
   const palm = engine.snap.palmProgress;
   const vanishText = v === 'gone' ? (palm > 0 ? `Coming back ${Math.round(palm * 100)}%` : 'Vanished. Snap or hold an open palm to come back') : '';
-  ui.setStatus(engine.captureText() || vanishText || `${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`);
+  const recText = recorder.recording ? `Recording ${Math.floor(recorder.seconds / 60)}:${String(recorder.seconds % 60).padStart(2, '0')} (R to stop). ` : '';
+  ui.setStatus(recText + (engine.captureText() || vanishText || `${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`));
 }
 
 addEventListener('keydown', (e) => {
@@ -121,6 +140,7 @@ addEventListener('keydown', (e) => {
   else if (e.key === 's' || e.key === 'S') snapshot();
   else if (e.key === 'x' || e.key === 'X') engine.toggleVanish();
   else if (e.key === 'c' || e.key === 'C') engine.captureRoom();
+  else if (e.key === 'r' || e.key === 'R') toggleRecording();
 });
 
 function snapshot() {

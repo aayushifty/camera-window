@@ -42,6 +42,9 @@ export class Vision {
   private handFrame = -1e9;
   private lastHands: { hands: Pt[][]; world: P3[][] } = { hands: [], world: [] };
   private maxHands = 2;
+  private faceLast: { t: number; pts: P3[] } | null = null;
+  private facePrev: { t: number; pts: P3[] } | null = null;
+  private shapes: Record<string, number> = {};
 
   /** base: where `wasm/` and `models/` are served (the site root, or the extension's own URL). */
   async init(onStep: (msg: string) => void, base = '/'): Promise<void> {
@@ -91,30 +94,54 @@ export class Vision {
     const ts = Math.max(this.lastTs + 1, performance.now());
     this.lastTs = ts;
 
-    // The models run back to back on the main thread (~110 ms a frame on integrated graphics), so:
-    // hands every frame while one is tracked or was lost in the last ~15 frames, otherwise the costly
-    // search for a new hand every 3rd frame;
-    // the person mask every 3rd frame, offset from that search; the face every frame.
+    // The models share the main thread with the call (~20-30 ms each on integrated graphics), so at most
+    // one heavy model runs per frame and the picture stays near 30 fps:
+    //   even frames: the face (and the person mask every 4th even frame)
+    //   odd frames:  the hands while one is tracked or was just lost (motion blur), else the costly search
+    //                for a new hand every 3rd odd frame, else the person mask
+    // On frames without a fresh face, it is predicted from its last two positions so the mask keeps up.
     const n = this.frameNo++;
-    if (still || n - this.handFrame <= 15 || n % 3 === 0) {
-      const hr = this.hand.detectForVideo(src, ts);
-      this.lastHands = {
-        hands: hr.landmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y }))),
-        world: hr.worldLandmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y, z: p.z }))),
-      };
-      if (hr.landmarks.length) this.handFrame = n;
+    const handsLive = n - this.handFrame <= 15;
+    let segNow = still || !this.mask;
+    if (still || n % 2 === 1) {
+      if (still || handsLive || n % 6 === 1) {
+        const hr = this.hand.detectForVideo(src, ts);
+        this.lastHands = {
+          hands: hr.landmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y }))),
+          world: hr.worldLandmarks.map((l) => l.map((p) => ({ x: p.x, y: p.y, z: p.z }))),
+        };
+        if (hr.landmarks.length) this.handFrame = n;
+      } else segNow = true;
+    }
+    if (still || n % 2 === 0) {
+      const fr = this.face.detectForVideo(src, ts);
+      const fl = fr.faceLandmarks[0];
+      this.facePrev = this.faceLast;
+      this.faceLast = fl ? { t: ts, pts: fl.map((p) => ({ x: p.x, y: p.y, z: p.z })) } : null;
+      this.shapes = {};
+      for (const c of fr.faceBlendshapes[0]?.categories ?? []) this.shapes[c.categoryName] = c.score;
+      if (n % 8 === 0) segNow = true;
     }
     const { hands, world } = this.lastHands;
-    const fr = this.face.detectForVideo(src, ts);
-    const fl = fr.faceLandmarks[0];
-    const face = fl ? fl.map((p) => ({ x: p.x, y: p.y, z: p.z })) : null;
-    const shapes: Record<string, number> = {};
-    for (const c of fr.faceBlendshapes[0]?.categories ?? []) shapes[c.categoryName] = c.score;
+    const face = this.predictFace(ts);
+    const shapes = this.shapes;
 
-    if (still || !this.mask || n % 3 === 1) this.segment(src, w, h, ts, still);
+    if (segNow) this.segment(src, w, h, ts, still);
     const out = { hands, world, face, shapes, mask: this.mask };
     if (still) this.stillCache = out;
     return out;
+  }
+
+  /** The last face found, moved on by its recent velocity (at most one detection interval ahead). */
+  private predictFace(now: number): P3[] | null {
+    const b = this.faceLast, a = this.facePrev;
+    if (!b) return null;
+    if (!a || b.t <= a.t || now <= b.t) return b.pts;
+    const k = Math.min(1, (now - b.t) / (b.t - a.t));
+    return b.pts.map((p, i) => {
+      const q = a.pts[i]!;
+      return { x: p.x + (p.x - q.x) * k, y: p.y + (p.y - q.y) * k, z: p.z };
+    });
   }
 
   /**
