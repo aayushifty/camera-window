@@ -63,6 +63,8 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
   const ctx = out.getContext('2d')!;
   let running = true;
   let timer = 0;
+  // a capture pressed before this camera started doesn't count; only new presses of the popup button do
+  let seenCapture = settings().captureAt;
   const loop = () => {
     if (!running) return;
     const started = performance.now();
@@ -76,6 +78,12 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
       ctx.setTransform(-1, 0, 0, 1, w, 0); // drawn mirrored like a selfie view; the call gets the true picture
       ctx.drawImage(engine.renderer.canvas, 0, 0, w, h);
       engine.drawVanish(ctx, 'image');
+      if (s.captureAt !== seenCapture) {
+        seenCapture = s.captureAt;
+        engine.captureRoom();
+      }
+      const msg = engine.captureText();
+      if (msg) drawNote(ctx, msg, w, h);
     } else {
       ctx.setTransform(1, 0, 0, 1, 0, 0); // off, or models still loading: the plain camera
       ctx.drawImage(video, 0, 0, w, h);
@@ -95,6 +103,21 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
   };
   cam.addEventListener('ended', () => track.stop());
   return new MediaStream([track, ...stream.getAudioTracks()]);
+}
+
+/** A short message on the video (room-capture countdown). Seen in the call too, for those few seconds. */
+function drawNote(ctx: CanvasRenderingContext2D, text: string, w: number, h: number): void {
+  const size = Math.round(h * 0.045);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.font = `600 ${size}px system-ui, sans-serif`;
+  const tw = ctx.measureText(text).width;
+  const x = (w - tw) / 2, y = h - size * 2.2;
+  ctx.fillStyle = 'rgba(16,16,20,0.72)';
+  ctx.beginPath();
+  ctx.roundRect(x - size * 0.7, y - size * 1.1, tw + size * 1.4, size * 1.6, size * 0.4);
+  ctx.fill();
+  ctx.fillStyle = '#ede6d6';
+  ctx.fillText(text, x, y);
 }
 
 const md = navigator.mediaDevices;

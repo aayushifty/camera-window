@@ -108,7 +108,7 @@ function frame(now: number) {
   const v = engine.vanish.state;
   const palm = engine.snap.palmProgress;
   const vanishText = v === 'gone' ? (palm > 0 ? `Coming back ${Math.round(palm * 100)}%` : 'Vanished. Snap or hold an open palm to come back') : '';
-  ui.setStatus(vanishText || `${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`);
+  ui.setStatus(engine.captureText() || vanishText || `${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`);
 }
 
 addEventListener('keydown', (e) => {
@@ -120,6 +120,7 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'h' || e.key === 'H') ui.toggleHidden();
   else if (e.key === 's' || e.key === 'S') snapshot();
   else if (e.key === 'x' || e.key === 'X') engine.toggleVanish();
+  else if (e.key === 'c' || e.key === 'C') engine.captureRoom();
 });
 
 function snapshot() {

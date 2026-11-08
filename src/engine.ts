@@ -306,6 +306,16 @@ export class Engine {
     }
   }
 
+  /** Capture the empty room (3 s to step out of frame first), so vanishing shows the real room behind you. */
+  captureRoom(): void {
+    this.vanish.captureRoom(performance.now());
+  }
+
+  /** Room-capture message to show the user right now, or null. */
+  captureText(): string | null {
+    return this.vanish.captureText(performance.now());
+  }
+
   /** Snap or come back by key/button, same as the gestures. */
   toggleVanish(): void {
     if (this.vanish.state === 'live') this.pendingVanish = 'snap';

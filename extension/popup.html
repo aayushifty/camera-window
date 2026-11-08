@@ -12,6 +12,9 @@
   label { display: flex; gap: 8px; align-items: center; padding: 2px 0; cursor: pointer; }
   input { accent-color: #e0284a; margin: 0; }
   p { margin: 10px 0 0; color: #a39d90; font-size: 12px; }
+  button { margin-top: 4px; width: 100%; padding: 7px 10px; font: inherit; color: #ede6d6; background: #2a2026; border: 1px solid #5a3a44; border-radius: 6px; cursor: pointer; }
+  button:hover { background: #3a2830; }
+  button:focus-visible, input:focus-visible { outline: 2px solid #e0284a; outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -27,6 +30,8 @@
   <fieldset><label><input type="checkbox" name="black"> Black webbing (Web)</label></fieldset>
   <fieldset><label><input type="checkbox" name="snap"> Snap my fingers to vanish</label></fieldset>
 </form>
+<button type="button" id="capture">Capture my room</button>
+<p id="captureNote" hidden>You have 3 seconds to step out of frame, then your room is recorded for a few seconds. Vanishing then shows your real room.</p>
 <p>Snap again, or hold an open palm for 2 seconds, to come back. Changes apply to open calls right away. Turning it on or off fully takes effect when the call restarts the camera.</p>
 <script src="popup.js"></script>
 </body>

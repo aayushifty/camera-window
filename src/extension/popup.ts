@@ -25,13 +25,18 @@ chrome.storage.sync.get(DEFAULTS, (s: Settings) => {
   field('snap').checked = s.snap;
 });
 
+document.getElementById('capture')!.addEventListener('click', () => {
+  chrome.storage.sync.set({ captureAt: Date.now() });
+  (document.getElementById('captureNote') as HTMLElement).hidden = false;
+});
+
 form.addEventListener('change', () => {
-  const s: Settings = {
+  const s: Omit<Settings, 'captureAt'> = {
     enabled: field('enabled').checked,
     character: field('character').value || DEFAULTS.character,
     fullFrame: field('mode').value !== 'window',
     webStyle: field('black').checked ? 1 : 0,
     snap: field('snap').checked,
   };
-  chrome.storage.sync.set(s);
+  chrome.storage.sync.set(s); // captureAt is left as it is: only the button sets it
 });

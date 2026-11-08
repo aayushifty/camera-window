@@ -11,6 +11,17 @@ const DUST_LAYERS = 20;
 const DUST_MAX_W = 960;
 const DURATION_MS = 2400;
 
+/** Room capture: a countdown to step out of frame, then the empty room is recorded and locked. */
+export const CAPTURE = { countdownMs: 3000, recordMs: 2500, doneShownMs: 2500 };
+
+/** Where a room capture started at `start` stands at `now`. */
+export function captureStage(start: number, now: number): { stage: 'countdown' | 'recording' | 'done'; secondsLeft: number } {
+  const t = now - start;
+  if (t < CAPTURE.countdownMs) return { stage: 'countdown', secondsLeft: Math.ceil((CAPTURE.countdownMs - t) / 1000) };
+  if (t < CAPTURE.countdownMs + CAPTURE.recordMs) return { stage: 'recording', secondsLeft: 0 };
+  return { stage: 'done', secondsLeft: 0 };
+}
+
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 type Ctx = CanvasRenderingContext2D;
 function pair(w: number, h: number, opts?: CanvasRenderingContext2DSettings): [HTMLCanvasElement, Ctx] {
@@ -46,6 +57,10 @@ export class Vanish {
   private hasMask = false;
   private plateSeeded = false;
   private hasFill = false;
+  /** a room capture in progress (start time), and whether the captured room is locked in */
+  private capture: number | null = null;
+  private captureDoneAt = -1e9;
+  roomLocked = false;
   private dust: Dust | null = null;
   private animStart = 0;
 
@@ -89,8 +104,29 @@ export class Vanish {
       this.maskVersion = mask.version;
       this.updateMask(mask);
     }
-    this.updatePlate(frame);
+    if (this.capture !== null && captureStage(this.capture, now).stage === 'done') {
+      this.capture = null;
+      this.roomLocked = true; // frozen from now on, so your shadow or a passer-by never gets baked in
+      this.captureDoneAt = now;
+    }
+    this.updatePlate(frame, now);
     this.render(now);
+  }
+
+  /** Start a room capture: 3 s to step out of frame, then the empty room is recorded and locked. */
+  captureRoom(now: number): void {
+    if (this.state !== 'live') return;
+    this.roomLocked = false;
+    this.capture = now;
+  }
+
+  /** What to tell the user about a room capture right now, or null. */
+  captureText(now: number): string | null {
+    if (this.capture !== null) {
+      const c = captureStage(this.capture, now);
+      return c.stage === 'countdown' ? `Step out of frame… ${c.secondsLeft}` : 'Recording your room… stay out';
+    }
+    return now - this.captureDoneAt < CAPTURE.doneShownMs ? 'Room captured. Come back and snap' : null;
   }
 
   /** Start vanishing. person: the picture as it looks now, in image space, to turn to dust. */
@@ -148,7 +184,7 @@ export class Vanish {
     this.hasMask = true;
   }
 
-  private updatePlate(frame: Src): void {
+  private updatePlate(frame: Src, now: number): void {
     const { W, H } = this;
     const { tmp, plate, mExcl } = this.c;
     const t = tmp[1];
@@ -157,8 +193,11 @@ export class Vanish {
     t.globalCompositeOperation = 'destination-out';
     t.drawImage(mExcl[0], 0, 0, W, H);
     t.globalCompositeOperation = 'source-over';
+    if (this.roomLocked) return;
     const p = plate[1];
-    p.globalAlpha = this.plateSeeded ? 0.4 : 1;
+    // while recording a capture, the room is taken at full strength; otherwise it is blended in gently
+    const recording = this.capture !== null && captureStage(this.capture, now).stage === 'recording';
+    p.globalAlpha = this.plateSeeded && !recording ? 0.4 : 1;
     p.drawImage(tmp[0], 0, 0);
     p.globalAlpha = 1;
     this.plateSeeded = true;

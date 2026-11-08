@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { P3 } from '../src/face';
 import { SnapDetector, handFeatures } from '../src/snap';
+import { captureStage } from '../src/vanish';
 
 const v = (x: number, y: number, z = 0): P3 => ({ x, y, z });
 
@@ -94,5 +95,15 @@ describe('snap gesture', () => {
     const palm = Array.from({ length: 80 }, openPalm); // 2.6 s
     expect(run(palm, new SnapDetector(), false)).toEqual([]);
     expect(run(palm, new SnapDetector(), true)).toEqual(['palm']);
+  });
+});
+
+describe('room capture', () => {
+  it('counts down 3 s, records, then is done', () => {
+    expect(captureStage(0, 0)).toEqual({ stage: 'countdown', secondsLeft: 3 });
+    expect(captureStage(0, 2100)).toEqual({ stage: 'countdown', secondsLeft: 1 });
+    expect(captureStage(0, 3000).stage).toBe('recording');
+    expect(captureStage(0, 5400).stage).toBe('recording');
+    expect(captureStage(0, 5600).stage).toBe('done');
   });
 });

@@ -10,6 +10,8 @@ export interface Settings {
   webStyle: number;
   /** Snap your fingers to vanish into dust. */
   snap: boolean;
+  /** Set to Date.now() by the popup's "Capture my room" button; each new value starts one capture. */
+  captureAt: number;
 }
 
-export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0, snap: true };
+export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0, snap: true, captureAt: 0 };
