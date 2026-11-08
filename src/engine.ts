@@ -263,9 +263,7 @@ export class Engine {
     const both = hands.length >= 2;
     const open = this.gate.update(both, both && hands.every((h) => isPinched(h)), t) || this.fullFrame;
     this.open = open;
-    // Web is a mask on the head: once the pinch opens it, it is drawn on the whole head, not cut by the window
-    const headOnly = CHARACTERS[this.character]!.id === 'web';
-    if (this.fullFrame || (headOnly && open)) {
+    if (this.fullFrame) {
       // just past the canvas edge, so the window's frame line stays out of the picture
       const W = renderer.canvasWidth + 8, H = renderer.canvasHeight + 8;
       this.quad = [{ x: -8, y: -8 }, { x: W, y: -8 }, { x: W, y: H }, { x: -8, y: H }];

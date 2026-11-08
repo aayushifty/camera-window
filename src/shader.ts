@@ -481,10 +481,8 @@ void main() {
       vec2 cen = (uQ[0] + uQ[1] + uQ[2] + uQ[3]) * 0.25;
       float span = max(length(uQ[1] - uQ[0]), 1.0);
       float t = dot(p - cen, normalize(vec2(1.0, -0.55))) / span;
-      if (uChar != 1) {                                             // Web is a mask on the head, not a pane of glass
-        ch += PAPER * 0.04 * exp(-pow((t + 0.14) * 7.0, 2.0));
-        ch += (hash(p + fract(uTime) * 97.0) - 0.5) * 0.022;
-      }
+      ch += PAPER * 0.04 * exp(-pow((t + 0.14) * 7.0, 2.0));
+      ch += (hash(p + fract(uTime) * 97.0) - 0.5) * 0.022;
       col = mix(col, ch, inside * uWin);
     }
     float d = abs(sd);
