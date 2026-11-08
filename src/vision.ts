@@ -61,8 +61,9 @@ export class Vision {
         runningMode: 'VIDEO',
         numHands: 2,
         minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
+        // kept low so a hand blurred by a fast snap stays tracked instead of being dropped mid-gesture
+        minHandPresenceConfidence: 0.3,
+        minTrackingConfidence: 0.3,
       }),
     );
     this.face = await make('face tracking', (delegate) =>

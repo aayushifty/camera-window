@@ -1,15 +1,11 @@
 /**
  * Finger-snap and open-palm detection from MediaPipe hand world landmarks (metres, 21 points).
  *
- * Main path, with a microphone: a click heard (snapsound.ts) while a hand in view had thumb and middle
- * finger together in the moment before. The click proves the snap; the pose rules out other clicks.
- *
- * Camera-only fallback — all three phases, in order, fast:
- *   1. contact  — thumb tip pressed on the middle fingertip for 2+ frames, middle finger held away from the palm
- *   2. release  — thumb and middle clearly apart (a wide gap above the contact line, so jitter can't cross it)
- *   3. slam     — the middle fingertip lands on the palm, having dropped a long way since contact
- * and 2+3 within SNAP.windowMs of the last contact frame. A relaxed hand drifting near
- * the old single threshold, or slowly letting go of a pinch, never fires.
+ * A snap is judged by speed, not by exact positions: thumb and middle finger were together, and within
+ * SNAP.windowMs they are far apart with the middle finger curled toward the palm. One frame of each is
+ * enough, and a frame or two lost to motion blur in between doesn't matter. Things that are not snaps:
+ * a relaxed hand drifting (never jumps that far that fast), slowly letting go of a pinch (too slow), and
+ * a fist opening (the middle finger moves away from the palm, not toward it).
  */
 import type { P3 } from './face';
 
@@ -21,16 +17,12 @@ const PINKY_MCP = 17, PINKY_PIP = 18, PINKY_TIP = 20;
 
 /** Distances below are in palm lengths (wrist to middle knuckle), so they hold at any hand size or distance. */
 export const SNAP = {
-  contact: 0.36, // thumb–middle gap that counts as pressed together
-  armAway: 0.6, // middle tip must be at least this far from the palm while pressed (rules out fists)
-  release: 0.7, // thumb–middle gap after the snap
-  land: 0.8, // middle tip this close to the palm = landed
-  drop: 0.25, // how far the middle tip must travel toward the palm
-  windowMs: 600, // release + slam must follow the last contact frame within this
-  cooldownMs: 1500,
+  near: 0.45, // thumb–middle gap that counts as "together" before the snap
+  jump: 0.35, // how much that gap must open...
+  curl: 0.15, // ...while the middle fingertip moves this much closer to the palm...
+  windowMs: 350, // ...within this time
+  cooldownMs: 1200,
   palmHoldMs: 2000, // open palm held this long brings you back
-  near: 0.55, // thumb–middle gap that counts as a snap pose for the click path (lenient: the click is the proof)
-  clickPoseMs: 800, // the pose must have been seen this long before the click, at most
 };
 
 const d3 = (a: P3, b: P3) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -67,21 +59,19 @@ export function handFeatures(w: P3[]): HandFeatures | null {
   return { pinch, slam, open };
 }
 
-interface HandState {
-  contactFrames: number;
-  lastContact: number;
-  armed: boolean;
-  armSlam: number;
+interface Sample {
+  t: number;
+  pinch: number;
+  slam: number;
 }
 
 export type SnapEvent = 'snap' | 'palm';
 
 export class SnapDetector {
   // shortcut: hands keyed by MediaPipe's list order, which can swap when two hands cross; fine for one snapping hand
-  private hands: HandState[] = [];
+  /** recent frames per hand, kept by time (not by presence), so a hand lost to blur mid-snap still counts */
+  private hist: Sample[][] = [];
   private lastSnap = -1e9;
-  private lastNear = -1e9;
-  private clickUsed = -1e9;
   private palmSince: number | null = null;
   private palmLast = -1e9;
   /** 0..1 while an open palm is being held to come back */
@@ -89,11 +79,8 @@ export class SnapDetector {
   /** last features per hand, for on-screen tuning */
   debug: HandFeatures[] = [];
 
-  /**
-   * gone: you are currently vanished (enables the open-palm return).
-   * click: time of the last click the microphone heard (same clock as now), if listening.
-   */
-  update(world: P3[][], now: number, gone: boolean, click = -1e9): SnapEvent | null {
+  /** gone: you are currently vanished (enables the open-palm return). */
+  update(world: P3[][], now: number, gone: boolean): SnapEvent | null {
     let event: SnapEvent | null = null;
     let anyOpen = false;
     this.debug = [];
@@ -102,39 +89,19 @@ export class SnapDetector {
       if (!f) return;
       this.debug.push(f);
       anyOpen ||= f.open;
-      if (f.pinch < SNAP.near) this.lastNear = now;
-      const st = (this.hands[i] ??= { contactFrames: 0, lastContact: -1e9, armed: false, armSlam: 0 });
-      if (f.pinch < SNAP.contact) {
-        st.contactFrames++;
-        st.lastContact = now;
-        st.armSlam = f.slam;
-        st.armed = st.contactFrames >= 2 && f.slam >= SNAP.armAway;
-        return;
-      }
-      st.contactFrames = 0;
-      if (!st.armed) return;
-      if (now - st.lastContact > SNAP.windowMs) {
-        st.armed = false;
-        return;
-      }
-      if (f.pinch >= SNAP.release && f.slam <= SNAP.land && st.armSlam - f.slam >= SNAP.drop) {
-        st.armed = false;
-        if (now - this.lastSnap > SNAP.cooldownMs) {
+      const h = (this.hist[i] ??= []);
+      while (h.length && now - h[0]!.t > SNAP.windowMs) h.shift();
+      if (!event && now - this.lastSnap > SNAP.cooldownMs) {
+        const before = h.find((s) => s.pinch <= SNAP.near && f.pinch - s.pinch >= SNAP.jump && s.slam - f.slam >= SNAP.curl);
+        if (before) {
           this.lastSnap = now;
           event = 'snap';
+          h.length = 0;
+          return;
         }
       }
+      h.push({ t: now, pinch: f.pinch, slam: f.slam });
     });
-    this.hands.length = Math.min(this.hands.length, Math.max(world.length, 1));
-
-    // heard a click that we haven't used yet, with a snap pose just before it
-    if (click > this.clickUsed && now - click < SNAP.clickPoseMs) {
-      this.clickUsed = click;
-      if (this.lastNear >= click - SNAP.clickPoseMs && click - this.lastSnap > SNAP.cooldownMs) {
-        this.lastSnap = click;
-        event = 'snap';
-      }
-    }
 
     if (gone && anyOpen) {
       this.palmSince ??= now;

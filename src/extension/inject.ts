@@ -41,25 +41,7 @@ function getVision(base: string): Vision {
   return vision;
 }
 
-/**
- * A raw microphone feed for hearing snaps: call sites often turn on noise suppression, which can dull the click,
- * and many ask for the mic separately from the camera. Only opened when the site already has mic permission,
- * so it never causes a new prompt; otherwise the call's own audio track is used, if this stream has one.
- */
-async function snapMic(stream: MediaStream, real: MediaDevices['getUserMedia']): Promise<{ track?: MediaStreamTrack; own: boolean }> {
-  try {
-    const p = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-    if (p.state === 'granted') {
-      const s = await real({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-      return { track: s.getAudioTracks()[0], own: true };
-    }
-  } catch {
-    // no permissions API or no mic: fall through
-  }
-  return { track: stream.getAudioTracks()[0], own: false };
-}
-
-async function transform(stream: MediaStream, real: MediaDevices['getUserMedia']): Promise<MediaStream> {
+async function transform(stream: MediaStream): Promise<MediaStream> {
   const base = root.dataset.henshinBase;
   if (!base) throw new Error('extension URL missing');
   const cam = stream.getVideoTracks()[0]!;
@@ -74,8 +56,6 @@ async function transform(stream: MediaStream, real: MediaDevices['getUserMedia']
   const engine = new Engine(document.createElement('canvas'), v);
   engine.renderer.resize(w, h, 1);
   engine.setSource(video, w, h, false);
-  const mic = await snapMic(stream, real);
-  if (mic.track) engine.listen(mic.track); // without a mic, snapping uses the camera alone
 
   const out = document.createElement('canvas');
   out.width = w;
@@ -111,7 +91,6 @@ async function transform(stream: MediaStream, real: MediaDevices['getUserMedia']
     running = false;
     clearTimeout(timer);
     cam.stop();
-    if (mic.own) mic.track?.stop();
     stopOut();
   };
   cam.addEventListener('ended', () => track.stop());
@@ -125,7 +104,7 @@ if (md?.getUserMedia) {
     const stream = await real(c);
     if (!c?.video || !settings().enabled || !stream.getVideoTracks().length) return stream;
     try {
-      return await transform(stream, real);
+      return await transform(stream);
     } catch (e) {
       console.warn('[henshin] camera passed through unchanged:', e);
       return stream;

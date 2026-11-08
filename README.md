@@ -69,7 +69,7 @@ Dev check without a camera: `npm run dev`, then open `/tests/extension-harness.h
 
 Snap your fingers and you blow away as dust, leaving your room behind. Snap again, or hold an open palm for 2 seconds, to come back. The room is learned from whatever the camera sees around you, so move about a little first for a cleaner result.
 
-A snap is heard and seen: the microphone listens for the snap's sharp click, and it only counts if a hand in view had thumb and middle finger together just before it, so typing, claps and voices don't trigger it. In calls the extension uses the call's microphone (a raw feed if the site already has mic permission, so there's no new prompt); the app asks for the microphone once and shows "Heard a snap" when it hears one. Without a microphone, a camera-only fallback still works when the press, release and slam into the palm are all seen within about half a second.
+A snap is judged by speed: thumb and middle finger together, then within about a third of a second far apart with the middle finger curled toward the palm. One frame of each is enough, and a blurred frame in between is fine. Relaxed hands, slowly letting go of a pinch, and opening a fist don't trigger it.
 
 ## Files
 

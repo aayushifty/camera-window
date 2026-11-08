@@ -59,13 +59,6 @@ async function openSource(): Promise<void> {
   }
   await video.play();
   engine.setSource(video, video.videoWidth, video.videoHeight, false);
-  if (!sourcePath) {
-    // the microphone hears the snap's click; without it, snapping falls back to the camera alone
-    navigator.mediaDevices
-      .getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
-      .then((s) => engine.listen(s.getAudioTracks()[0]!))
-      .catch(() => {});
-  }
 }
 
 function resize() {
@@ -115,8 +108,7 @@ function frame(now: number) {
   const v = engine.vanish.state;
   const palm = engine.snap.palmProgress;
   const vanishText = v === 'gone' ? (palm > 0 ? `Coming back ${Math.round(palm * 100)}%` : 'Vanished. Snap or hold an open palm to come back') : '';
-  const heard = performance.now() - engine.lastClick < 900 ? 'Heard a snap. ' : '';
-  ui.setStatus(heard + (vanishText || `${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`));
+  ui.setStatus(vanishText || `${simulate ? 'Simulated hands. ' : ''}${handsText}${engine.faceSeen ? '' : ', no face found'}`);
 }
 
 addEventListener('keydown', (e) => {
