@@ -187,7 +187,8 @@ export class Vanish {
     f.globalCompositeOperation = 'copy';
     f.drawImage(L[0]!.c, 0, 0, this.W, this.H);
     f.globalCompositeOperation = 'source-over';
-    f.filter = `blur(${Math.max(2, Math.round(this.W / 160))}px)`;
+    // strong blur: each bridged row is a flat colour band, and rows differ (walls vs furniture)
+    f.filter = `blur(${Math.max(4, Math.round(this.W / 45))}px)`;
     f.drawImage(this.scanlineFill(), 0, 0, this.W, this.H);
     f.filter = 'none';
     f.drawImage(plate[0], 0, 0);
