@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { P3 } from '../src/face';
 import { SnapDetector, handFeatures } from '../src/snap';
+import { Onset } from '../src/snapsound';
 
 const v = (x: number, y: number, z = 0): P3 => ({ x, y, z });
 
@@ -89,5 +90,42 @@ describe('snap gesture', () => {
     const palm = Array.from({ length: 80 }, openPalm); // 2.6 s
     expect(run(palm, new SnapDetector(), false)).toEqual([]);
     expect(run(palm, new SnapDetector(), true)).toEqual(['palm']);
+  });
+});
+
+describe('snap by sound', () => {
+  it('a click right after a thumb-on-middle pose is a snap, even if the hand blurs out', () => {
+    const d = new SnapDetector();
+    d.update([pressed()], 0, false);
+    d.update([], 66, false); // hand lost in the motion blur
+    expect(d.update([], 99, false, 80)).toBe('snap');
+  });
+
+  it('a click with an open hand, or no hand, is not a snap', () => {
+    const d = new SnapDetector();
+    d.update([openPalm()], 0, false);
+    expect(d.update([openPalm()], 33, false, 20)).toBe(null);
+    expect(new SnapDetector().update([], 33, false, 20)).toBe(null);
+  });
+
+  it('a click long after the pose is not a snap, and one click counts once', () => {
+    const d = new SnapDetector();
+    d.update([pressed()], 0, false);
+    expect(d.update([], 1500, false, 1400)).toBe(null);
+    const e = new SnapDetector();
+    e.update([pressed()], 0, false);
+    expect(e.update([pressed()], 33, false, 20)).toBe('snap');
+    expect(e.update([pressed()], 66, false, 20)).toBe(null);
+  });
+});
+
+describe('click onset', () => {
+  it('fires on a sharp loud click over quiet room noise, not on a slow rise', () => {
+    const o = new Onset();
+    for (let i = 0; i < 50; i++) expect(o.push(0.004)).toBe(false);
+    expect(o.push(0.12)).toBe(true);
+    const s = new Onset();
+    const fired = Array.from({ length: 60 }, (_, i) => s.push(0.004 + i * 0.002)).some(Boolean);
+    expect(fired).toBe(false);
   });
 });

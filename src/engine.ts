@@ -4,6 +4,7 @@ import { Renderer, type FaceUniforms } from './renderer';
 import { FaceRig } from './rig';
 import { simHands } from './sim';
 import { SnapDetector } from './snap';
+import { ClickListener } from './snapsound';
 import { Vanish } from './vanish';
 import type { Src, Vision, VisionFrame } from './vision';
 
@@ -84,6 +85,7 @@ export class Engine {
   private readonly lctx: CanvasRenderingContext2D;
   private light: [number, number, number] = [-0.25, -0.6, -1];
   private pendingVanish: 'snap' | 'restore' | null = null;
+  private clicks: ClickListener | null = null;
   /** Face landmarks smoothed over time for everything drawn on the face (blinks still read the raw ones). */
   private faceS: { x: number; y: number; z: number }[] = [];
   private readonly personCtx = document.createElement('canvas').getContext('2d')!;
@@ -170,7 +172,7 @@ export class Engine {
     cover.update(renderer.canvasWidth, renderer.canvasHeight, vw, vh);
     if (this.snapEnabled && this.vision.ready && !this.still) {
       this.vanish.update(src, vw, vh, vf.mask, now);
-      const ev = this.snap.update(vf.world, now, this.vanish.state === 'gone');
+      const ev = this.snap.update(vf.world, now, this.vanish.state === 'gone', this.clicks?.lastClick);
       if (ev === 'snap' && this.vanish.state === 'live') this.pendingVanish = 'snap';
       else if (ev && this.vanish.state === 'gone') this.pendingVanish = 'restore';
     }
@@ -303,6 +305,21 @@ export class Engine {
       if (this.pendingVanish === 'snap') this.vanish.snap(c.canvas);
       else this.vanish.restore(c.canvas);
       this.pendingVanish = null;
+    }
+  }
+
+  /** performance.now() of the last click the microphone heard */
+  get lastClick(): number {
+    return this.clicks?.lastClick ?? -1e9;
+  }
+
+  /** Hear snaps on this microphone track (the snap's click is far more reliable than the camera alone). */
+  listen(track: MediaStreamTrack): void {
+    this.clicks?.stop();
+    try {
+      this.clicks = new ClickListener(track);
+    } catch (e) {
+      console.warn('[henshin] snap sound unavailable; snapping uses the camera only.', e);
     }
   }
 

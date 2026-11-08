@@ -1,7 +1,10 @@
 /**
  * Finger-snap and open-palm detection from MediaPipe hand world landmarks (metres, 21 points).
  *
- * A snap only counts when all three phases happen, in order, fast:
+ * Main path, with a microphone: a click heard (snapsound.ts) while a hand in view had thumb and middle
+ * finger together in the moment before. The click proves the snap; the pose rules out other clicks.
+ *
+ * Camera-only fallback — all three phases, in order, fast:
  *   1. contact  — thumb tip pressed on the middle fingertip for 2+ frames, middle finger held away from the palm
  *   2. release  — thumb and middle clearly apart (a wide gap above the contact line, so jitter can't cross it)
  *   3. slam     — the middle fingertip lands on the palm, having dropped a long way since contact
@@ -26,6 +29,8 @@ export const SNAP = {
   windowMs: 600, // release + slam must follow the last contact frame within this
   cooldownMs: 1500,
   palmHoldMs: 2000, // open palm held this long brings you back
+  near: 0.55, // thumb–middle gap that counts as a snap pose for the click path (lenient: the click is the proof)
+  clickPoseMs: 800, // the pose must have been seen this long before the click, at most
 };
 
 const d3 = (a: P3, b: P3) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -75,6 +80,8 @@ export class SnapDetector {
   // shortcut: hands keyed by MediaPipe's list order, which can swap when two hands cross; fine for one snapping hand
   private hands: HandState[] = [];
   private lastSnap = -1e9;
+  private lastNear = -1e9;
+  private clickUsed = -1e9;
   private palmSince: number | null = null;
   private palmLast = -1e9;
   /** 0..1 while an open palm is being held to come back */
@@ -82,8 +89,11 @@ export class SnapDetector {
   /** last features per hand, for on-screen tuning */
   debug: HandFeatures[] = [];
 
-  /** gone: you are currently vanished (enables the open-palm return). */
-  update(world: P3[][], now: number, gone: boolean): SnapEvent | null {
+  /**
+   * gone: you are currently vanished (enables the open-palm return).
+   * click: time of the last click the microphone heard (same clock as now), if listening.
+   */
+  update(world: P3[][], now: number, gone: boolean, click = -1e9): SnapEvent | null {
     let event: SnapEvent | null = null;
     let anyOpen = false;
     this.debug = [];
@@ -92,6 +102,7 @@ export class SnapDetector {
       if (!f) return;
       this.debug.push(f);
       anyOpen ||= f.open;
+      if (f.pinch < SNAP.near) this.lastNear = now;
       const st = (this.hands[i] ??= { contactFrames: 0, lastContact: -1e9, armed: false, armSlam: 0 });
       if (f.pinch < SNAP.contact) {
         st.contactFrames++;
@@ -115,6 +126,15 @@ export class SnapDetector {
       }
     });
     this.hands.length = Math.min(this.hands.length, Math.max(world.length, 1));
+
+    // heard a click that we haven't used yet, with a snap pose just before it
+    if (click > this.clickUsed && now - click < SNAP.clickPoseMs) {
+      this.clickUsed = click;
+      if (this.lastNear >= click - SNAP.clickPoseMs && click - this.lastSnap > SNAP.cooldownMs) {
+        this.lastSnap = click;
+        event = 'snap';
+      }
+    }
 
     if (gone && anyOpen) {
       this.palmSince ??= now;
