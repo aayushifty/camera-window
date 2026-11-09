@@ -50,7 +50,7 @@ npm run build:extension
 1. Open `chrome://extensions`, turn on Developer mode, click **Load unpacked** and pick `dist-extension`.
 2. Join a call in Chrome (Meet, Zoom web, Teams web, Discord web). The call gets the transformed camera; your microphone is untouched.
 3. Click the extension's toolbar icon to pick the character, and choose "All the time" or "Only between my pinched hands".
-4. To make a video, click **Start recording** in the popup, then **Stop and save video**: what the call sees, effects included, is saved to your Downloads as a .webm file (with the call's microphone if the site sends it with the camera).
+4. To make a video, click **Start recording** in the popup, then **Stop and save video**: what the call sees, effects included, is saved to your Downloads as an .mp4 file, ready for social media (with the call's microphone if the site sends it with the camera). The webcam is asked for its best picture, up to 1080p at 30 fps. Tick **Mirror my video** to send and record the picture mirrored, like your selfie view.
 
 Everything runs on your computer. If tracking fails to load on a site, that site gets your plain camera. Keep the call tab in front: Chrome slows background tabs. Desktop apps (Zoom, Teams apps) are not covered; use their browser versions.
 
@@ -66,7 +66,7 @@ Dev check without a camera: `npm run dev`, then open `/tests/extension-harness.h
 | S | Save a PNG snapshot |
 | X | Vanish / come back (same as snapping) |
 | C | Capture your room: 3 s to step out of frame, then it is recorded |
-| R | Start / stop recording a video (saved as .webm in Downloads) |
+| R | Start / stop recording a video (saved as .mp4 in Downloads) |
 
 ## Snap to vanish
 

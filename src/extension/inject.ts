@@ -79,9 +79,10 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
       engine.webStyle = s.webStyle;
       engine.snapEnabled = s.snap;
       engine.step(performance.now());
-      ctx.setTransform(-1, 0, 0, 1, w, 0); // drawn mirrored like a selfie view; the call gets the true picture
+      // the renderer draws a selfie (mirrored) view: flip it back for the true picture, or keep it when mirroring
+      ctx.setTransform(s.mirror ? 1 : -1, 0, 0, 1, s.mirror ? 0 : w, 0);
       ctx.drawImage(engine.renderer.canvas, 0, 0, w, h);
-      engine.drawVanish(ctx, 'image');
+      engine.drawVanish(ctx, s.mirror ? 'screen' : 'image');
       if (s.captureAt !== seenCapture) {
         seenCapture = s.captureAt;
         engine.captureRoom();
@@ -89,7 +90,7 @@ async function transform(stream: MediaStream): Promise<MediaStream> {
       const msg = engine.captureText();
       if (msg) drawNote(ctx, msg, w, h);
     } else {
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // off, or models still loading: the plain camera
+      ctx.setTransform(s.mirror ? -1 : 1, 0, 0, 1, s.mirror ? w : 0, 0); // off, or models still loading: the plain camera
       ctx.drawImage(video, 0, 0, w, h);
     }
     if (s.recording !== seenRecording) {
@@ -131,10 +132,21 @@ function drawNote(ctx: CanvasRenderingContext2D, text: string, w: number, h: num
   ctx.fillText(text, x, y);
 }
 
+/**
+ * Ask the webcam for its best picture (up to 1080p, 30 fps) instead of the call's small default, so videos
+ * look sharp when recorded or posted; the call's encoder still sends whatever size it wants. The page's
+ * own choices (which camera, facing) are kept.
+ */
+function best(v: boolean | MediaTrackConstraints): MediaTrackConstraints {
+  const keep = typeof v === 'object' ? v : {};
+  return { ...keep, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+}
+
 const md = navigator.mediaDevices;
 if (md?.getUserMedia) {
   const real = md.getUserMedia.bind(md);
   md.getUserMedia = async (c?: MediaStreamConstraints) => {
+    if (c?.video && settings().enabled) c = { ...c, video: best(c.video) };
     const stream = await real(c);
     if (!c?.video || !settings().enabled || !stream.getVideoTracks().length) return stream;
     try {

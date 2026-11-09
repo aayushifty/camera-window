@@ -23,6 +23,7 @@ chrome.storage.sync.get(DEFAULTS, (s: Settings) => {
   field('mode').value = s.fullFrame ? 'full' : 'window';
   field('black').checked = s.webStyle === 1;
   field('snap').checked = s.snap;
+  field('mirror').checked = s.mirror;
 });
 
 const rec = document.getElementById('record') as HTMLButtonElement;
@@ -53,6 +54,7 @@ form.addEventListener('change', () => {
     fullFrame: field('mode').value !== 'window',
     webStyle: field('black').checked ? 1 : 0,
     snap: field('snap').checked,
+    mirror: field('mirror').checked,
   };
   chrome.storage.sync.set(s); // captureAt and recording are left as they are: only their buttons set them
 });

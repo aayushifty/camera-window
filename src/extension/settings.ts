@@ -10,10 +10,12 @@ export interface Settings {
   webStyle: number;
   /** Snap your fingers to vanish into dust. */
   snap: boolean;
+  /** Send (and record) the picture mirrored, as in a selfie view. Off: the true picture, as others see you. */
+  mirror: boolean;
   /** Set to Date.now() by the popup's "Capture my room" button; each new value starts one capture. */
   captureAt: number;
   /** The popup's record button: true while recording; switching it off saves the video file. */
   recording: boolean;
 }
 
-export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0, snap: true, captureAt: 0, recording: false };
+export const DEFAULTS: Settings = { enabled: true, character: 'void', fullFrame: true, webStyle: 0, snap: true, mirror: false, captureAt: 0, recording: false };

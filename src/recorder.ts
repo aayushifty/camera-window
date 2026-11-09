@@ -1,4 +1,7 @@
-/** Records a stream (the transformed picture, plus any audio track given) and saves it as a .webm file. */
+/**
+ * Records a stream (the transformed picture, plus any audio track given) and saves it as a video file:
+ * MP4 (H.264) where Chrome can, since social apps take MP4 but often reject WebM; WebM otherwise.
+ */
 export class Recorder {
   private rec: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -15,13 +18,15 @@ export class Recorder {
 
   start(stream: MediaStream): void {
     if (this.rec) return;
-    const type = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+    const type = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'].find((t) =>
+      MediaRecorder.isTypeSupported(t),
+    );
     this.chunks = [];
-    const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8_000_000 });
+    const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 12_000_000 });
     rec.ondataavailable = (e) => {
       if (e.data.size) this.chunks.push(e.data);
     };
-    rec.onstop = () => this.save(new Blob(this.chunks, { type: rec.mimeType || 'video/webm' }));
+    rec.onstop = () => this.save(new Blob(this.chunks, { type: rec.mimeType || type || 'video/webm' }));
     rec.start(1000); // a chunk every second, so a crash loses at most a second
     this.rec = rec;
     this.started = performance.now();
@@ -40,7 +45,7 @@ export class Recorder {
     const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `henshin-${stamp}.webm`;
+    a.download = `henshin-${stamp}.${blob.type.startsWith('video/mp4') ? 'mp4' : 'webm'}`;
     document.body.append(a);
     a.click();
     a.remove();
